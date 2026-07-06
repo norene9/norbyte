@@ -22,13 +22,15 @@ services:
       - norbyte_network
 
   api:
-    build: .
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: norbyte_api
     restart: always
-    # ❌ CRITICAL FIX: Changed from '--host' to '--host 0.0.0.0 --port 8000 --reload'
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    working_dir: /app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
-      - .:/workspace
+      - ./backend:/app
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
@@ -39,22 +41,25 @@ services:
     networks:
       - norbyte_network
 
-  worker:
-    build: .
-    container_name: norbyte_worker
-    restart: always
-    command: celery -A worker.celery_app worker --loglevel=info
-    volumes:
-      - .:/workspace
-    environment:
-      DATABASE_URL: ${DATABASE_URL}
-      REDIS_URL: ${REDIS_URL}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-    depends_on:
-      - db
-      - redis
-    networks:
-      - norbyte_network
+  # worker:
+  #   build:
+  #     context: ./backend
+  #     dockerfile: Dockerfile
+  #   container_name: norbyte_worker
+  #   restart: always
+  #   working_dir: /app
+  #   command: celery -A app.tasks.celery_worker worker --loglevel=info
+  #   volumes:
+  #     - ./backend:/app
+  #   environment:
+  #     DATABASE_URL: ${DATABASE_URL}
+  #     REDIS_URL: ${REDIS_URL}
+  #     ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+  #   depends_on:
+  #     - db
+  #     - redis
+  #   networks:
+  #     - norbyte_network
 
   nginx:
     image: nginx:alpine

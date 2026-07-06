@@ -1,17 +1,24 @@
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from app.db.base_class import Base
+from app import models  # noqa: F401  # Import all models so tables are registered
 
 # 1. Fetch the absolute system URL path injected from your docker-compose environment
-DATABASE_URL = os.getenv(
-    "DATABASE_URL"
-)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 # 2. Build the unified database communications engine
 engine = create_engine(DATABASE_URL)
 
 # 3. Create a unique session factory instance 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def initialize_database(target_engine=None):
+    """Create all SQLAlchemy tables if they do not exist."""
+    engine_to_use = target_engine or engine
+    Base.metadata.create_all(bind=engine_to_use)
+
 
 # 4. Define the contextual dependency injector
 def get_db():

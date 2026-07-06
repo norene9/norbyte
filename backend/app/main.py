@@ -2,6 +2,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from app.db.session import initialize_database
 from app.exceptions import BusinessRuleError, NotFoundError
 from app.routers import (
     users_router,
@@ -31,6 +32,11 @@ app.include_router(users_router, prefix="/api/v1")
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(connections_router, prefix="/api/v1")
 app.include_router(definitions_router, prefix="/api/v1")
+
+
+@app.on_event("startup")
+def create_tables():
+    initialize_database()
 
 
 @app.exception_handler(NotFoundError)
