@@ -8,6 +8,7 @@ class RoleBase(BaseModel):
 
 class RoleResponse(RoleBase):
     id: int
+    
 
     class Config:
         from_attributes = True
@@ -16,16 +17,17 @@ class RoleResponse(RoleBase):
 class UserBase(BaseModel):
     username: str
     email: EmailStr
-    role_id: Optional[int] = None
 
 
 class UserCreate(UserBase):
     password: str
+    role_id: Optional[int] = None
+    
 
 
 class UserResponse(UserBase):
     id: int
-    roles: List[RoleResponse] = []
+    role: RoleResponse 
 
     class Config:
         from_attributes = True

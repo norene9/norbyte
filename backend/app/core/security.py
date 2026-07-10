@@ -2,7 +2,7 @@ import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
-
+import bcrypt
 import jwt
 from fastapi import Header, HTTPException, Request, Response, status
 
@@ -14,7 +14,6 @@ REFRESH_COOKIE_NAME = "refresh_token"
 COOKIE_SAME_SITE = "lax"
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "true").lower() == "true"
 COOKIE_HTTP_ONLY = True
-
 _refresh_token_store: dict[str, int] = {}
 
 
@@ -111,3 +110,9 @@ def rotate_refresh_token(response: Response, refresh_token: str) -> tuple[str, s
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
     return set_session_cookies(response, user_id)
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))

@@ -1,8 +1,10 @@
+from http.client import HTTPException
+
 from app.exceptions import BusinessRuleError, UserNotFoundError
 from app.models import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.user import UserCreate
-
+from app.core.security import verify_password
 
 class UserService:
     def __init__(self, repository: UserRepository):
@@ -24,6 +26,6 @@ class UserService:
 
     def authenticate(self, username: str, password: str) -> User | None:
         user = self.repository.get_by_username(username)
-        if not user or user.password != password:
-            return None
+        if not user or not verify_password(plain_password, user.password):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
         return user
