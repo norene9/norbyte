@@ -17,6 +17,5 @@ class Role(Base):
     id = Column(Integer, primary_key=True, index=True)
     type = Column(String, unique=True, index=True)
 
-    # Relationships
-    users = relationship("User", secondary="user_role_association", back_populates="roles")
     permissions = relationship("Permission", secondary=role_permission_association, back_populates="roles")
+    users = relationship("User", back_populates="role")

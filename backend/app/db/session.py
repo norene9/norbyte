@@ -5,10 +5,19 @@ from app.db.base_class import Base
 from app import models  # noqa: F401  # Import all models so tables are registered
 
 # 1. Fetch the absolute system URL path injected from your docker-compose environment
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./app.db")
+
+engine_kwargs = {}
+if DATABASE_URL and DATABASE_URL.startswith("sqlite"):
+    from sqlalchemy.pool import StaticPool
+
+    engine_kwargs = {
+        "connect_args": {"check_same_thread": False},
+        "poolclass": StaticPool,
+    }
 
 # 2. Build the unified database communications engine
-engine = create_engine(DATABASE_URL)
+engine = create_engine(DATABASE_URL, **engine_kwargs)
 
 # 3. Create a unique session factory instance 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

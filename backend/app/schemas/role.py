@@ -1,17 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
-
-
-class PermissionBase(BaseModel):
-    action: str
-    model: str
-
-
-class PermissionResponse(PermissionBase):
-    id: int
-
-    class Config:
-        from_attributes = True
+from typing import Optional
 
 
 class RoleBase(BaseModel):
@@ -24,7 +12,6 @@ class RoleCreate(RoleBase):
 
 class RoleResponse(RoleBase):
     id: int
-    permissions: List[PermissionResponse] = []
 
     class Config:
         from_attributes = True

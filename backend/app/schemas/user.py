@@ -16,6 +16,7 @@ class RoleResponse(RoleBase):
 class UserBase(BaseModel):
     username: str
     email: EmailStr
+    role_id: Optional[int] = None
 
 
 class UserCreate(UserBase):
@@ -34,3 +35,4 @@ class UserUpdate(BaseModel):
     username: Optional[str] = None
     email: Optional[EmailStr] = None
     password: Optional[str] = None
+    

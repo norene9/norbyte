@@ -21,3 +21,9 @@ class UserService:
 
     def list(self) -> list[User]:
         return self.repository.list()
+
+    def authenticate(self, username: str, password: str) -> User | None:
+        user = self.repository.get_by_username(username)
+        if not user or user.password != password:
+            return None
+        return user
