@@ -1,3 +1,5 @@
+from fastapi import UploadFile
+
 from app.exceptions import DestinationDefinitionNotFoundError, SourceDefinitionNotFoundError
 from app.models import DestinationDefinition, SourceDefinition
 from app.repositories.definition_repository import DefinitionRepository
@@ -9,8 +11,8 @@ class DefinitionService:
     def __init__(self, repository: DefinitionRepository):
         self.repository = repository
 
-    def create_source(self, dto: SourceDefinitionCreate) -> SourceDefinition:
-        return self.repository.create_source(dto)
+    def create_source(self, dto: SourceDefinitionCreate,logo_file: UploadFile | None = None) -> SourceDefinition:
+        return self.repository.create_source(dto, logo_file)
 
     def get_source(self, source_id: int) -> SourceDefinition:
         source = self.repository.get_source_by_id(source_id)
@@ -21,9 +23,11 @@ class DefinitionService:
     def list_sources(self) -> list[SourceDefinition]:
         return self.repository.list_sources()
 
-    def update_source(self, source_id: int, dto: SourceDefinitionUpdate) -> SourceDefinition:
+    def update_source(self, source_id: int, dto: SourceDefinitionUpdate,logo_file: UploadFile | None = None) -> SourceDefinition:
         source = self.get_source(source_id)
-        return self.repository.update_source(source, dto)
+        if not source:
+            raise SourceDefinitionNotFoundError(source_id)
+        return self.repository.update_source(source, dto,logo_file)
 
     def delete_source(self, source_id: int) -> None:
         source = self.get_source(source_id)

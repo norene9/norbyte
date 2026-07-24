@@ -43,6 +43,7 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
       - ./backend:/app
+      - uploads_data:/data/uploads 
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
@@ -88,6 +89,7 @@ services:
 
 volumes:
   db_data:
+  uploads_data:
 
 networks:
   norbyte_network:

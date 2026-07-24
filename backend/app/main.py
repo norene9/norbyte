@@ -2,6 +2,7 @@ import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from app.core.security import get_current_user
 from app.db.session import initialize_database
 from app.exceptions import BusinessRuleError, NotFoundError
@@ -35,7 +36,7 @@ app.include_router(users_router, prefix="/api/v1")
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(connections_router, prefix="/api/v1")
 app.include_router(definitions_router, prefix="/api/v1")
-
+app.mount("/destinations", StaticFiles(directory="destinations"), name="destinations")
 
 @app.middleware("http")
 async def enforce_authentication(request: Request, call_next):

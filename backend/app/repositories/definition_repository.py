@@ -2,14 +2,31 @@ from sqlalchemy.orm import Session
 from app.models import DestinationDefinition, SourceDefinition
 from app.schemas.destination_definition import DestinationDefinitionCreate, DestinationDefinitionUpdate
 from app.schemas.source_definition import SourceDefinitionCreate, SourceDefinitionUpdate
+from fastapi import UploadFile
+import os
+import uuid
+SOURCES_DIR = "/data/uploads/sources"
+DESTINATIONS_DIR = "/data/uploads/destinations"
 
+os.makedirs(SOURCES_DIR, exist_ok=True)
+os.makedirs(DESTINATIONS_DIR, exist_ok=True)
 
 class DefinitionRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def create_source(self, dto: SourceDefinitionCreate) -> SourceDefinition:
-        source = SourceDefinition(**dto.model_dump())
+    def create_source(self, dto: SourceDefinitionCreate,logo_file: UploadFile | None = None) -> SourceDefinition:
+        data = dto.model_dump()
+        if logo_file:
+            ext = logo_file.filename.split(".")[-1]
+            filename = f"{uuid.uuid4()}.{ext}"
+            filepath = os.path.join(SOURCES_DIR, filename)
+
+            with open(filepath, "wb") as f:
+                f.write(logo_file.file.read())
+
+            data["logo"] = filepath
+        source = SourceDefinition(**data)
         self.db.add(source)
         self.db.commit()
         self.db.refresh(source)
@@ -21,8 +38,24 @@ class DefinitionRepository:
     def list_sources(self) -> list[SourceDefinition]:
         return self.db.query(SourceDefinition).all()
 
-    def update_source(self, source: SourceDefinition, dto: SourceDefinitionUpdate) -> SourceDefinition:
+    def update_source(self, source: SourceDefinition, dto: SourceDefinitionUpdate,logo_file: UploadFile | None = None) -> SourceDefinition:
         update_data = dto.model_dump(exclude_unset=True)
+        if logo_file:
+            # delete the old logo file, if there is one
+            if source.logo:
+                old_path = source.logo.lstrip("/")  # strip leading slash if you store "/sources/xxx.png"
+                if os.path.exists(old_path):
+                    os.remove(old_path)
+
+            ext = logo_file.filename.split(".")[-1]
+            filename = f"{uuid.uuid4()}.{ext}"
+            filepath = os.path.join(SOURCES_DIR, filename)
+
+            with open(filepath, "wb") as f:
+                f.write(logo_file.file.read())
+
+            update_data["logo"] = f"/{filepath}"
+
         for key, value in update_data.items():
             setattr(source, key, value)
 
@@ -32,6 +65,10 @@ class DefinitionRepository:
         return source
 
     def delete_source(self, source: SourceDefinition) -> None:
+        if source.logo:
+                old_path = source.logo.lstrip("/")  # strip leading slash if you store "/sources/xxx.png"
+                if os.path.exists(old_path):
+                    os.remove(old_path)
         self.db.delete(source)
         self.db.commit()
 

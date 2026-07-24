@@ -4,7 +4,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 import bcrypt
 import jwt
-from fastapi import Header, HTTPException, Request, Response, status
+from fastapi import Header, HTTPException, Request, Response, status, Depends
+from sqlalchemy.orm import Session
+from app.db.session import get_db
+from app.models import User
 
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret-change-me")
 ACCESS_TOKEN_TTL_MINUTES = int(os.getenv("ACCESS_TOKEN_TTL_MINUTES", "15"))
@@ -17,16 +20,7 @@ COOKIE_HTTP_ONLY = True
 _refresh_token_store: dict[str, int] = {}
 
 
-def require_admin(user_role: str | None = Header(default=None, alias="X-User-Role")) -> None:
-    if (user_role or "").lower() != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins can list users",
-        )
-    return None
-
-
-def _create_token(subject: int, token_type: str, ttl: timedelta) -> str:
+def _create_token(subject: int, token_type: str, ttl: timedelta,extra: dict | None = None) -> str:
     now = datetime.now(timezone.utc)
     payload = {
         "sub": subject,
@@ -35,11 +29,13 @@ def _create_token(subject: int, token_type: str, ttl: timedelta) -> str:
         "exp": int((now + ttl).timestamp()),
         "jti": str(uuid.uuid4()),
     }
+    if extra:
+        payload.update(extra)
     return jwt.encode(payload, JWT_SECRET, algorithm="HS256")
 
 
-def create_access_token(user_id: int) -> str:
-    return _create_token(user_id, "access", timedelta(minutes=ACCESS_TOKEN_TTL_MINUTES))
+def create_access_token(user_id: int, role: str) -> str:
+    return _create_token(user_id, "access", timedelta(minutes=ACCESS_TOKEN_TTL_MINUTES),extra={"role": role})
 
 
 def create_refresh_token(user_id: int) -> str:
@@ -58,8 +54,8 @@ def _decode_token(token: str, expected_type: str) -> dict[str, Any]:
     return payload
 
 
-def set_session_cookies(response: Response, user_id: int) -> tuple[str, str]:
-    access_token = create_access_token(user_id)
+def set_session_cookies(response: Response, user_id: int, role: str) -> tuple[str, str]:
+    access_token = create_access_token(user_id, role)
     refresh_token = create_refresh_token(user_id)
     refresh_payload = _decode_token(refresh_token, "refresh")
 
@@ -97,6 +93,14 @@ def get_current_user(request: Request) -> dict[str, Any]:
     payload = _decode_token(access_token, "access")
     return payload
 
+def get_current_user_db(
+    payload: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> User:
+    user = db.query(User).filter(User.id == payload["sub"]).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return user
 
 def rotate_refresh_token(response: Response, refresh_token: str) -> tuple[str, str]:
     payload = _decode_token(refresh_token, "refresh")
@@ -116,3 +120,11 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+
+def require_admin(payload: dict = Depends(get_current_user)) -> None:
+    if (payload.get("role") or "").lower() != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins can list users",
+        )
+    return None
