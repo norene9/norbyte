@@ -36,7 +36,8 @@ app.include_router(users_router, prefix="/api/v1")
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(connections_router, prefix="/api/v1")
 app.include_router(definitions_router, prefix="/api/v1")
-app.mount("/destinations", StaticFiles(directory="destinations"), name="destinations")
+app.mount("/destinations", StaticFiles(directory="/data/uploads/destinations"), name="destinations")
+app.mount("/sources", StaticFiles(directory="/data/uploads/sources"), name="sources")
 
 @app.middleware("http")
 async def enforce_authentication(request: Request, call_next):

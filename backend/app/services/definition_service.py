@@ -33,8 +33,8 @@ class DefinitionService:
         source = self.get_source(source_id)
         self.repository.delete_source(source)
 
-    def create_destination(self, dto: DestinationDefinitionCreate) -> DestinationDefinition:
-        return self.repository.create_destination(dto)
+    def create_destination(self, dto: DestinationDefinitionCreate, logo_file: UploadFile | None = None) -> DestinationDefinition:
+        return self.repository.create_destination(dto, logo_file)
 
     def get_destination(self, destination_id: int) -> DestinationDefinition:
         destination = self.repository.get_destination_by_id(destination_id)
@@ -45,9 +45,11 @@ class DefinitionService:
     def list_destinations(self) -> list[DestinationDefinition]:
         return self.repository.list_destinations()
 
-    def update_destination(self, destination_id: int, dto: DestinationDefinitionUpdate) -> DestinationDefinition:
+    def update_destination(self, destination_id: int, dto: DestinationDefinitionUpdate, logo_file: UploadFile | None = None) -> DestinationDefinition:
         destination = self.get_destination(destination_id)
-        return self.repository.update_destination(destination, dto)
+        if not destination:
+            raise DestinationDefinitionNotFoundError(destination_id)
+        return self.repository.update_destination(destination, dto,logo_file)
 
     def delete_destination(self, destination_id: int) -> None:
         destination = self.get_destination(destination_id)

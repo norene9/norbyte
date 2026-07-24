@@ -4,7 +4,6 @@ from typing import Optional
 
 class DestinationDefinitionBase(BaseModel):
     name: str
-    logo: Optional[str] = None
     config_icon: Optional[str] = None
 
 
@@ -21,5 +20,4 @@ class DestinationDefinitionResponse(DestinationDefinitionBase):
 
 class DestinationDefinitionUpdate(BaseModel):
     name: Optional[str] = None
-    logo: Optional[str] = None
     config_icon: Optional[str] = None

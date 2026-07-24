@@ -52,14 +52,14 @@ def update_source_definition(
     _admin : None = Depends(require_admin),
     
 ):
-    update_fields = {}
-    if name:  # excludes both None and ""
-        update_fields["name"] = name
-    if config_icon:
-        update_fields["config_icon"] = config_icon
+        update_fields = {}
+        if name:  # excludes both None and ""
+            update_fields["name"] = name
+        if config_icon:
+            update_fields["config_icon"] = config_icon
 
-    dto = SourceDefinitionUpdate(**update_fields)
-    return service.update_source(source_id, dto, logo_file)
+        dto = SourceDefinitionUpdate(**update_fields)
+        return service.update_source(source_id, dto, logo_file)
 
 
 @router.delete("/sources/{source_id}")
@@ -75,11 +75,14 @@ def delete_source_definition(
 
 @router.post("/destinations/", response_model=DestinationDefinitionResponse)
 def create_destination_definition(
-    destination: DestinationDefinitionCreate,
-    _admin : None = Depends(require_admin),
     service: DefinitionService = Depends(get_definition_service),
+     name: str = Form(...),
+    config_icon: str | None = Form(None),
+    logo_file: UploadFile | None = File(None),
+    _admin : None = Depends(require_admin),
 ):
-    return service.create_destination(destination)
+    destination = DestinationDefinitionCreate(name=name, config_icon=config_icon)
+    return service.create_destination(destination,logo_file)
 
 
 @router.get("/destinations/{destination_id}", response_model=DestinationDefinitionResponse)
@@ -100,12 +103,21 @@ def list_destination_definitions(
 @router.put("/destinations/{destination_id}", response_model=DestinationDefinitionResponse)
 def update_destination_definition(
     destination_id: int,
-    destination: DestinationDefinitionUpdate,
     service: DefinitionService = Depends(get_definition_service),
+    name: str | None = Form(None),
+    config_icon: str | None = Form(None),
+    logo_file: UploadFile | None = File(None),
     _admin : None = Depends(require_admin),
     
 ):
-    return service.update_destination(destination_id, destination)
+    update_fields = {}
+    if name:  # excludes both None and ""
+        update_fields["name"] = name
+    if config_icon:
+        update_fields["config_icon"] = config_icon
+
+    dto = DestinationDefinitionUpdate(**update_fields)
+    return service.update_destination(destination_id, dto, logo_file)
 
 
 @router.delete("/destinations/{destination_id}")

@@ -72,8 +72,18 @@ class DefinitionRepository:
         self.db.delete(source)
         self.db.commit()
 
-    def create_destination(self, dto: DestinationDefinitionCreate) -> DestinationDefinition:
-        destination = DestinationDefinition(**dto.model_dump())
+    def create_destination(self, dto: DestinationDefinitionCreate,logo_file : UploadFile |None = None) -> DestinationDefinition:
+        data = dto.model_dump()
+        if logo_file:
+            ext = logo_file.filename.split(".")[-1]
+            filename = f"{uuid.uuid4()}.{ext}"
+            filepath = os.path.join(DESTINATIONS_DIR, filename)
+
+            with open(filepath, "wb") as f:
+                f.write(logo_file.file.read())
+
+            data["logo"] = filepath
+        destination = DestinationDefinition(**data)
         self.db.add(destination)
         self.db.commit()
         self.db.refresh(destination)
@@ -85,8 +95,25 @@ class DefinitionRepository:
     def list_destinations(self) -> list[DestinationDefinition]:
         return self.db.query(DestinationDefinition).all()
 
-    def update_destination(self, destination: DestinationDefinition, dto: DestinationDefinitionUpdate) -> DestinationDefinition:
+    def update_destination(self, destination: DestinationDefinition, dto: DestinationDefinitionUpdate,
+                           logo_file: UploadFile | None = None) -> DestinationDefinition:
         update_data = dto.model_dump(exclude_unset=True)
+        if logo_file:
+            # delete the old logo file, if there is one
+            if destination.logo:
+                old_path = destination.logo.lstrip("/")  # strip leading slash if you store "/destinations/xxx.png"
+                if os.path.exists(old_path):
+                    os.remove(old_path)
+
+            ext = logo_file.filename.split(".")[-1]
+            filename = f"{uuid.uuid4()}.{ext}"
+            filepath = os.path.join(DESTINATIONS_DIR, filename)
+
+            with open(filepath, "wb") as f:
+                f.write(logo_file.file.read())
+
+            update_data["logo"] = f"/{filepath}"
+
         for key, value in update_data.items():
             setattr(destination, key, value)
 
@@ -96,5 +123,9 @@ class DefinitionRepository:
         return destination
 
     def delete_destination(self, destination: DestinationDefinition) -> None:
+        if destination.logo:
+            old_path = destination.logo.lstrip("/")  # strip leading slash if you store "/destinations/xxx.png"
+            if os.path.exists(old_path):
+                os.remove(old_path)
         self.db.delete(destination)
         self.db.commit()
