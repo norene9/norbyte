@@ -1,13 +1,37 @@
-from fastapi import APIRouter, Depends,Form, UploadFile, File
+import json
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
+
+from app.core.security import require_admin
 from app.db.session import get_db
 from app.repositories import DefinitionRepository
 from app.schemas.destination_definition import DestinationDefinitionCreate, DestinationDefinitionResponse, DestinationDefinitionUpdate
 from app.schemas.source_definition import SourceDefinitionCreate, SourceDefinitionResponse, SourceDefinitionUpdate
 from app.services.definition_service import DefinitionService
-from app.core.security import require_admin
 
 router = APIRouter(prefix="/definitions", tags=["definitions"])
+
+
+def parse_config_json(raw_value: str | None) -> dict | None:
+    if raw_value is None or raw_value.strip() == "":
+        return None
+
+    try:
+        parsed = json.loads(raw_value)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail="config_json must be valid JSON.",
+        ) from exc
+
+    if not isinstance(parsed, dict):
+        raise HTTPException(
+            status_code=422,
+            detail="config_json must be a JSON object.",
+        )
+
+    return parsed
 
 
 def get_definition_service(db: Session = Depends(get_db)) -> DefinitionService:
@@ -17,13 +41,12 @@ def get_definition_service(db: Session = Depends(get_db)) -> DefinitionService:
 @router.post("/sources/", response_model=SourceDefinitionResponse)
 def create_source_definition(
     name: str = Form(...),
-    config_icon: str | None = Form(None),
+    config_json: str | None = Form(None),
     logo_file: UploadFile | None = File(None),
     service: DefinitionService = Depends(get_definition_service),
-     _admin : None = Depends(require_admin),
-
+    _admin: None = Depends(require_admin),
 ):
-    source = SourceDefinitionCreate(name=name, config_icon=config_icon)
+    source = SourceDefinitionCreate(name=name, config_json=parse_config_json(config_json))
     return service.create_source(source, logo_file)
 
 
@@ -46,20 +69,19 @@ def list_source_definitions(
 def update_source_definition(
     source_id: int,
     name: str | None = Form(None),
-    config_icon: str | None = Form(None),
+    config_json: str | None = Form(None),
     logo_file: UploadFile | None = File(None),
     service: DefinitionService = Depends(get_definition_service),
-    _admin : None = Depends(require_admin),
-    
+    _admin: None = Depends(require_admin),
 ):
-        update_fields = {}
-        if name:  # excludes both None and ""
-            update_fields["name"] = name
-        if config_icon:
-            update_fields["config_icon"] = config_icon
+    update_fields = {}
+    if name:
+        update_fields["name"] = name
+    if config_json is not None:
+        update_fields["config_json"] = parse_config_json(config_json)
 
-        dto = SourceDefinitionUpdate(**update_fields)
-        return service.update_source(source_id, dto, logo_file)
+    dto = SourceDefinitionUpdate(**update_fields)
+    return service.update_source(source_id, dto, logo_file)
 
 
 @router.delete("/sources/{source_id}")
@@ -76,13 +98,13 @@ def delete_source_definition(
 @router.post("/destinations/", response_model=DestinationDefinitionResponse)
 def create_destination_definition(
     service: DefinitionService = Depends(get_definition_service),
-     name: str = Form(...),
-    config_icon: str | None = Form(None),
+    name: str = Form(...),
+    config_json: str | None = Form(None),
     logo_file: UploadFile | None = File(None),
-    _admin : None = Depends(require_admin),
+    _admin: None = Depends(require_admin),
 ):
-    destination = DestinationDefinitionCreate(name=name, config_icon=config_icon)
-    return service.create_destination(destination,logo_file)
+    destination = DestinationDefinitionCreate(name=name, config_json=parse_config_json(config_json))
+    return service.create_destination(destination, logo_file)
 
 
 @router.get("/destinations/{destination_id}", response_model=DestinationDefinitionResponse)
@@ -105,16 +127,15 @@ def update_destination_definition(
     destination_id: int,
     service: DefinitionService = Depends(get_definition_service),
     name: str | None = Form(None),
-    config_icon: str | None = Form(None),
+    config_json: str | None = Form(None),
     logo_file: UploadFile | None = File(None),
-    _admin : None = Depends(require_admin),
-    
+    _admin: None = Depends(require_admin),
 ):
     update_fields = {}
-    if name:  # excludes both None and ""
+    if name:
         update_fields["name"] = name
-    if config_icon:
-        update_fields["config_icon"] = config_icon
+    if config_json is not None:
+        update_fields["config_json"] = parse_config_json(config_json)
 
     dto = DestinationDefinitionUpdate(**update_fields)
     return service.update_destination(destination_id, dto, logo_file)

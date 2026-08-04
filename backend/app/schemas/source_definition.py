@@ -1,10 +1,11 @@
+
 from pydantic import BaseModel
-from typing import Optional
+from typing import Any, Optional
 
 
 class SourceDefinitionBase(BaseModel):
     name: str
-    config_icon: Optional[str] = None
+    config_json: Optional[dict[str, Any]] = None
 
 
 class SourceDefinitionCreate(SourceDefinitionBase):
@@ -13,11 +14,12 @@ class SourceDefinitionCreate(SourceDefinitionBase):
 
 class SourceDefinitionResponse(SourceDefinitionBase):
     id: int
-    logo: Optional[str] = None 
+    logo: Optional[str] = None
+
     class Config:
         from_attributes = True
 
 
 class SourceDefinitionUpdate(BaseModel):
     name: Optional[str] = None
-    config_icon: Optional[str] = None
+    config_json: Optional[dict[str, Any]] = None
