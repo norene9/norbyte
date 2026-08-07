@@ -44,9 +44,10 @@ def create_source_definition(
     config_json: str | None = Form(None),
     logo_file: UploadFile | None = File(None),
     service: DefinitionService = Depends(get_definition_service),
+    connector_type: str = Form(...),
     _admin: None = Depends(require_admin),
 ):
-    source = SourceDefinitionCreate(name=name, config_json=parse_config_json(config_json))
+    source = SourceDefinitionCreate(name=name, config_json=parse_config_json(config_json), connector_type=connector_type)
     return service.create_source(source, logo_file)
 
 
@@ -101,9 +102,10 @@ def create_destination_definition(
     name: str = Form(...),
     config_json: str | None = Form(None),
     logo_file: UploadFile | None = File(None),
+    connector_type: str = Form(...),
     _admin: None = Depends(require_admin),
 ):
-    destination = DestinationDefinitionCreate(name=name, config_json=parse_config_json(config_json))
+    destination = DestinationDefinitionCreate(name=name, config_json=parse_config_json(config_json), connector_type=connector_type  )
     return service.create_destination(destination, logo_file)
 
 

@@ -22,6 +22,7 @@ class ConnectionResponse(BaseModel):
 
 class ProjectResponse(ProjectBase):
     id: int
+    user_id: int
     connections: List[ConnectionResponse] = []
 
     class Config:

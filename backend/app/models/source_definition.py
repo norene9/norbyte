@@ -10,6 +10,7 @@ class SourceDefinition(Base):
     name = Column(String, unique=True, index=True)
     logo = Column(String, nullable=True)
     config_json = Column(JSON, nullable=True)
+    connector_type = Column(String, nullable=True)
 
     # Relationships
     connections = relationship("Connection", back_populates="source_definition")

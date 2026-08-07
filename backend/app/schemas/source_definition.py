@@ -6,6 +6,7 @@ from typing import Any, Optional
 class SourceDefinitionBase(BaseModel):
     name: str
     config_json: Optional[dict[str, Any]] = None
+    connector_type: Optional[str] = None
 
 
 class SourceDefinitionCreate(SourceDefinitionBase):
@@ -23,3 +24,4 @@ class SourceDefinitionResponse(SourceDefinitionBase):
 class SourceDefinitionUpdate(BaseModel):
     name: Optional[str] = None
     config_json: Optional[dict[str, Any]] = None
+    connector_type: Optional[str] = None

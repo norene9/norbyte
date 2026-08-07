@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class DestinationDefinitionBase(BaseModel):
     name: str
     config_json: Optional[dict[str, Any]] = None
+    connector_type: Optional[str] = None
 
 
 class DestinationDefinitionCreate(DestinationDefinitionBase):
@@ -23,3 +24,4 @@ class DestinationDefinitionResponse(DestinationDefinitionBase):
 class DestinationDefinitionUpdate(BaseModel):
     name: Optional[str] = None
     config_json: Optional[dict[str, Any]] = None
+    connector_type: Optional[str] = None
