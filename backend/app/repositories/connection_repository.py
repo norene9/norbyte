@@ -7,8 +7,9 @@ class ConnectionRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def create(self, dto: ConnectionCreate) -> Connection:
-        connection = Connection(**dto.model_dump())
+    def create(self, dto: ConnectionCreate | dict) -> Connection:
+        data = dto.model_dump() if hasattr(dto, "model_dump") else dto
+        connection = Connection(**data)
         self.db.add(connection)
         self.db.commit()
         self.db.refresh(connection)

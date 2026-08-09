@@ -5,7 +5,7 @@ from typing import Optional, Dict, Any
 class ConnectionBase(BaseModel):
     destination_id: int
     source_id: int
-    project_id: int
+    project_id: Optional[int] = None
     schedule: Optional[str] = None
     source_connection_json: Optional[Dict[str, Any]] = None
     destination_connection_json: Optional[Dict[str, Any]] = None
@@ -42,8 +42,12 @@ class SourceDefinitionResponse(BaseModel):
         from_attributes = True
 
 
-class ConnectionResponse(ConnectionBase):
+class ConnectionResponse(BaseModel):
     id: int
+    destination_id: int
+    source_id: int
+    project_id: Optional[int] = None
+    schedule: Optional[str] = None
     destination_definition: Optional[DestinationDefinitionResponse] = None
     source_definition: Optional[SourceDefinitionResponse] = None
     schemas: list[SchemaResponse] = []
