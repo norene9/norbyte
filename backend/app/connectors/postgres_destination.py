@@ -19,6 +19,16 @@ class PostgresDestinationConnector(DestinationConnector):
         conn.close()
         return True
 
+    def read_records(self, table: str, limit: int = 50) -> list[dict]:
+        schema = self.config.get("schema", "public")
+        conn = self._connect()
+        try:
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(f'SELECT * FROM "{schema}"."{table}" LIMIT %s', (limit,))
+                return [dict(row) for row in cur.fetchall()]
+        finally:
+            conn.close()
+
     def write_records(self, table: str, records: list[dict]) -> None:
         if not records:
             return
@@ -46,7 +56,6 @@ class PostgresDestinationConnector(DestinationConnector):
                     update_cols = [c for c in columns if c not in primary_key]
 
                     if not update_cols:
-                        # every column is part of the key — nothing to update, just ignore conflicts
                         insert_sql = (
                             f'INSERT INTO "{schema}"."{table}" ({col_list}) VALUES ({placeholders}) '
                             f'ON CONFLICT ({conflict_cols}) DO NOTHING'

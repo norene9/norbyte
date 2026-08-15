@@ -1,4 +1,4 @@
-from app.core.encryption import encrypt_config
+from app.core.encryption import decrypt_config, encrypt_config
 from app.exceptions import BusinessRuleError, ConnectionNotFoundError
 from app.models import Connection, DestinationDefinition, Project, SourceDefinition
 from app.repositories.connection_repository import ConnectionRepository
@@ -9,6 +9,21 @@ from app.services.connection_test import test_destination_connection, test_sourc
 class ConnectionService:
     def __init__(self, repository: ConnectionRepository):
         self.repository = repository
+
+    def _decrypt_connection_payloads(self, connection: Connection) -> Connection:
+        if not connection:
+            return connection
+
+        decrypted = Connection(
+            id=connection.id,
+            destination_id=connection.destination_id,
+            source_id=connection.source_id,
+            project_id=connection.project_id,
+            schedule=connection.schedule,
+            source_connection_json=decrypt_config(connection.source_connection_json) if connection.source_connection_json else None,
+            destination_connection_json=decrypt_config(connection.destination_connection_json) if connection.destination_connection_json else None,
+        )
+        return decrypted
 
     def create(self, dto: ConnectionCreate) -> Connection:
         self._validate_source(dto.source_id)
@@ -34,19 +49,24 @@ class ConnectionService:
         encrypted = dto.model_dump()
         encrypted["source_connection_json"] = encrypt_config(dto.source_connection_json)
         encrypted["destination_connection_json"] = encrypt_config(dto.destination_connection_json)
-        return self.repository.create(encrypted)
+        connection = self.repository.create(encrypted)
+        return self._decrypt_connection_payloads(connection)
 
     def get(self, connection_id: int) -> Connection:
         connection = self.repository.get_by_id(connection_id)
         if not connection:
             raise ConnectionNotFoundError(connection_id)
-        return connection
+        return self._decrypt_connection_payloads(connection)
 
     def list(self) -> list[Connection]:
-        return self.repository.list()
+        connections = self.repository.list()
+        return [self._decrypt_connection_payloads(connection) for connection in connections]
 
     def update(self, connection_id: int, dto: ConnectionUpdate) -> Connection:
-        connection = self.get(connection_id)
+        connection = self.repository.get_by_id(connection_id)
+        if not connection:
+            raise ConnectionNotFoundError(connection_id)
+
         if dto.source_connection_json is not None:
             source_definition = self.repository.db.query(SourceDefinition).filter(SourceDefinition.id == connection.source_id).first()
             if not source_definition or not source_definition.connector_type:
@@ -61,7 +81,8 @@ class ConnectionService:
             test_destination_connection(destination_definition.connector_type, dto.destination_connection_json)
             dto.destination_connection_json = encrypt_config(dto.destination_connection_json)
 
-        return self.repository.update(connection, dto)
+        updated = self.repository.update(connection, dto)
+        return self._decrypt_connection_payloads(updated)
 
     def delete(self, connection_id: int) -> None:
         connection = self.get(connection_id)

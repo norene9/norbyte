@@ -48,6 +48,8 @@ class ConnectionResponse(BaseModel):
     source_id: int
     project_id: Optional[int] = None
     schedule: Optional[str] = None
+    source_connection_json: Optional[Dict[str, Any]] = None
+    destination_connection_json: Optional[Dict[str, Any]] = None
     destination_definition: Optional[DestinationDefinitionResponse] = None
     source_definition: Optional[SourceDefinitionResponse] = None
     schemas: list[SchemaResponse] = []

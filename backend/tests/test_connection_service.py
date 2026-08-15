@@ -72,16 +72,33 @@ class ConnectionServiceTests(unittest.TestCase):
         self.assertEqual(connection.destination_id, self.destination.id)
         self.assertEqual(connection.project_id, self.project.id)
         self.assertEqual(connection.schedule, "0 * * * *")
-        self.assertIsInstance(connection.source_connection_json, str)
-        self.assertIsInstance(connection.destination_connection_json, str)
-        self.assertNotEqual(connection.source_connection_json, str(source_config))
-        self.assertNotEqual(connection.destination_connection_json, str(destination_config))
+        self.assertEqual(connection.source_connection_json, source_config)
+        self.assertEqual(connection.destination_connection_json, destination_config)
         self.assertTrue(mock_source.called)
         self.assertTrue(mock_destination.called)
 
         saved = self.session.query(Connection).filter_by(id=connection.id).first()
         self.assertIsInstance(saved.source_connection_json, str)
         self.assertIsInstance(saved.destination_connection_json, str)
+
+    def test_get_connection_returns_decrypted_json(self):
+        source_config = {"host": "source.example", "port": 5432, "database": "app", "username": "user", "password": "secret"}
+        destination_config = {"host": "dest.example", "port": 5432, "database": "app", "username": "user", "password": "secret"}
+
+        dto = ConnectionCreate(
+            source_id=self.source.id,
+            destination_id=self.destination.id,
+            project_id=self.project.id,
+            source_connection_json=source_config,
+            destination_connection_json=destination_config,
+        )
+
+        with patch("app.services.connection_service.test_source_connection"), patch("app.services.connection_service.test_destination_connection"):
+            created = self.service.create(dto)
+
+        fetched = self.service.get(created.id)
+        self.assertEqual(fetched.source_connection_json, source_config)
+        self.assertEqual(fetched.destination_connection_json, destination_config)
 
 
 if __name__ == "__main__":
