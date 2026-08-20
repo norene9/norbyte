@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.db.base_class import Base
+from app.core.encryption import encrypt_config
 from app.exceptions import BusinessRuleError, ConnectionNotFoundError
 from app.models import Connection, DestinationDefinition, Project, SourceDefinition, User
 from app.repositories.connection_repository import ConnectionRepository
@@ -99,6 +100,26 @@ class ConnectionServiceTests(unittest.TestCase):
         fetched = self.service.get(created.id)
         self.assertEqual(fetched.source_connection_json, source_config)
         self.assertEqual(fetched.destination_connection_json, destination_config)
+
+    def test_update_connection_persists_and_returns_selected_streams(self):
+        connection = Connection(
+            source_id=self.source.id,
+            destination_id=self.destination.id,
+            project_id=self.project.id,
+            source_connection_json=encrypt_config({}),
+            destination_connection_json=encrypt_config({}),
+        )
+        self.session.add(connection)
+        self.session.commit()
+
+        updated = self.service.update(
+            connection.id,
+            ConnectionUpdate(selected_streams=["test_users"]),
+        )
+
+        self.assertEqual(updated.selected_streams, ["test_users"])
+        saved = self.session.query(Connection).filter_by(id=connection.id).first()
+        self.assertEqual(saved.selected_streams, ["test_users"])
 
 
 if __name__ == "__main__":

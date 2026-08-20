@@ -4,7 +4,10 @@ from fastapi import HTTPException
 
 from app.connectors.registry import get_destination_connector, get_source_connector
 from app.core.encryption import decrypt_config
-from app.models import SyncJob
+from app.models import SyncJob, SyncState
+
+# Maximum number of characters to keep in job.logs; older content will be truncated
+MAX_LOG_CHARS = 200_000
 
 
 class SyncService:
@@ -41,21 +44,52 @@ class SyncService:
 
         return connector.discover()
 
-    def run_sync(self, connection_id: int) -> SyncJob:
+    def run_sync(self, connection_id: int, job_id: int | None = None) -> SyncJob:
         connection = self._get_connection_or_404(connection_id)
 
         source_def = self.definition_service.get_source(connection.source_id)
         dest_def = self.definition_service.get_destination(connection.destination_id)
 
-        job = SyncJob(
-            connection_id=connection.id,
-            status="running",
-            started_at=datetime.utcnow().isoformat(),
-            records_processed=0,
-        )
+        # If a job id was provided (created by the API), attach to it; otherwise create a new job.
+        if job_id is not None:
+            job = self.db.query(SyncJob).filter(SyncJob.id == job_id).first()
+            if not job:
+                # fallback to creating a job if not found
+                job = SyncJob(
+                    connection_id=connection.id,
+                    status="running",
+                    started_at=datetime.utcnow().isoformat(),
+                    records_processed=0,
+                )
+            else:
+                job.status = "running"
+                job.started_at = datetime.utcnow().isoformat()
+                job.records_processed = 0
+        else:
+            job = SyncJob(
+                connection_id=connection.id,
+                status="running",
+                started_at=datetime.utcnow().isoformat(),
+                records_processed=0,
+            )
+
         self.db.add(job)
         self.db.commit()
         self.db.refresh(job)
+
+        def _append_job_log(message: str):
+            ts = datetime.utcnow().isoformat()
+            existing = job.logs or ""
+            new = existing + f"[{ts}] {message}\n"
+            # Truncate if logs grow too large, keep the most recent portion
+            if len(new) > MAX_LOG_CHARS:
+                new = new[-MAX_LOG_CHARS:]
+            job.logs = new
+            self.db.add(job)
+            self.db.commit()
+            self.db.refresh(job)
+
+        _append_job_log("Job started")
 
         try:
             source_config = decrypt_config(connection.source_connection_json)
@@ -67,14 +101,69 @@ class SyncService:
             source = SourceCls(source_config)
             destination = DestCls(dest_config)
 
-            tables = source.discover()
+            # Respect user-selected streams if provided on the connection; otherwise discover all
+            if getattr(connection, "selected_streams", None):
+                configured_streams = connection.selected_streams
+                _append_job_log(f"Using user-selected streams: {configured_streams}")
+            else:
+                configured_streams = source.discover()
+                _append_job_log(f"Discovered streams: {configured_streams}")
+
             total_records = 0
 
-            for table in tables:
-                records = list(source.read_records(table))
+            for stream_entry in configured_streams:
+                # support either simple table name strings or dicts with extra config
+                if isinstance(stream_entry, dict):
+                    table_name = stream_entry.get("name") or stream_entry.get("table")
+                    cursor_field = stream_entry.get("cursor_field")
+                else:
+                    table_name = stream_entry
+                    cursor_field = None
+
+                _append_job_log(f"Syncing stream: {table_name} (cursor_field={cursor_field})")
+
+                get_table_schema = getattr(source, "get_table_schema", None)
+                ensure_table_matches_schema = getattr(destination, "ensure_table_matches_schema", None)
+                if callable(get_table_schema) and callable(ensure_table_matches_schema):
+                    source_schema = get_table_schema(table_name)
+                    ensure_table_matches_schema(table_name, source_schema)
+                    _append_job_log(f"Prepared destination table: {table_name}")
+
+                # Load last sync state for this connection+table
+                state = (
+                    self.db.query(SyncState)
+                    .filter(SyncState.connection_id == connection.id, SyncState.table_name == table_name)
+                    .first()
+                )
+                if not state:
+                    state = SyncState(connection_id=connection.id, table_name=table_name, cursor_field=cursor_field, cursor_value=None)
+                    self.db.add(state)
+                    self.db.commit()
+                    self.db.refresh(state)
+
+                cursor_value = state.cursor_value if state.cursor_value else None
+
+                # Pass cursor info to source.read_records for incremental reads
+                records = list(source.read_records(table_name, cursor_field=cursor_field, cursor_value=cursor_value))
+                _append_job_log(f"Read {len(records)} records from source for {table_name}")
+
                 if records:
-                    destination.write_records(table, records)
+                    destination.write_records(table_name, records)
+                    _append_job_log(f"Wrote {len(records)} records to destination for {table_name}")
                     total_records += len(records)
+
+                    # Update sync state cursor_value if we have a cursor_field
+                    if cursor_field and records:
+                        last_val = records[-1].get(cursor_field)
+                        if last_val is not None:
+                            state.cursor_field = cursor_field
+                            state.cursor_value = str(last_val)
+                            self.db.add(state)
+                            self.db.commit()
+                            self.db.refresh(state)
+                            _append_job_log(f"Updated sync state for {table_name}: cursor_value={state.cursor_value}")
+
+            _append_job_log(f"Sync finished, total records processed: {total_records}")
 
             job.status = "success"
             job.records_processed = total_records
@@ -85,6 +174,7 @@ class SyncService:
             job.status = "failed"
             job.error_message = str(exc)
             job.finished_at = datetime.utcnow().isoformat()
+            _append_job_log(f"Sync failed: {exc}")
 
         self.db.add(job)
         self.db.commit()

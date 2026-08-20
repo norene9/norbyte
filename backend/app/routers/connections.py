@@ -1,10 +1,16 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
+import time
 
 from app.dependencies import get_connection_service, get_sync_service
+from app.models import SyncJob
 from app.schemas.connection import ConnectionCreate, ConnectionResponse, ConnectionUpdate
 from app.schemas.sync_job import SyncJobResponse
 from app.services.connection_service import ConnectionService
 from app.services.sync_service import SyncService
+from app.db.session import SessionLocal
 
 router = APIRouter(prefix="/connections", tags=["connections"])
 
@@ -55,7 +61,22 @@ def trigger_sync(
     connection_id: int,
     service: SyncService = Depends(get_sync_service),
 ):
-    return service.run_sync(connection_id)
+    # Create a queued job record so callers get an immediate job id/status
+    job = SyncJob(connection_id=connection_id, status="queued", started_at=None, records_processed=0, logs="")
+    service.db.add(job)
+    service.db.commit()
+    service.db.refresh(job)
+
+    # Enqueue the Celery worker to perform the sync and update the job
+    try:
+        from app.tasks.celery_worker import run_sync_task
+
+        run_sync_task.delay(connection_id, job.id)
+    except Exception:
+        # If Celery isn't available, fall back to running synchronously
+        service.run_sync(connection_id, job_id=job.id)
+
+    return job
 
 
 @router.get("/{connection_id}/jobs", response_model=list[SyncJobResponse])
@@ -64,6 +85,43 @@ def list_sync_jobs(
     service: SyncService = Depends(get_sync_service),
 ):
     return service.list_jobs(connection_id)
+
+
+@router.get("/{connection_id}/jobs/{job_id}/logs/stream")
+async def stream_job_logs(
+    connection_id: int,
+    job_id: int,
+    service: SyncService = Depends(get_sync_service),
+):
+    """Server-Sent Events endpoint to stream incremental logs for a job. Polls the DB every second."""
+
+    async def event_stream():
+        last_len = 0
+        max_iterations = 300 
+        for _ in range(max_iterations):
+            db = SessionLocal() #fresh session for each iteration
+            try:
+                job = (
+                    db.query(SyncJob).filter(SyncJob.id == job_id, SyncJob.connection_id == connection_id).first()
+                )
+                if not job:
+                    yield "event: error\n"
+                    yield "data: Job not found\n\n"
+                    return
+                if job.status in ("success", "failed"):
+                    logs = job.logs or ""
+                    if len(logs) > last_len:
+                        new = logs[last_len:]
+                        last_len = len(logs)
+                        for line in new.splitlines(True):
+                            yield f"data: {line}\n\n"
+                    return
+            finally:
+                db.close()
+            await asyncio.sleep(1)  # Use asyncio.sleep for async context
+        yield "event: timeout\ndata: Streaming timeout after 5 minutes\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.get("/{connection_id}/schemas", response_model=list[str])

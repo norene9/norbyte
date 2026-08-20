@@ -4,7 +4,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app.core.security import get_current_user
-from app.db.session import initialize_database
 from app.exceptions import BusinessRuleError, NotFoundError
 from app.routers import (
     auth_router,
@@ -62,11 +61,6 @@ async def enforce_authentication(request: Request, call_next):
             return JSONResponse(status_code=401, content={"detail": str(exc.detail if hasattr(exc, "detail") else exc)})
 
     return await call_next(request)
-
-
-@app.on_event("startup")
-def create_tables():
-    initialize_database()
 
 
 @app.exception_handler(NotFoundError)

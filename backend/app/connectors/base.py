@@ -17,8 +17,11 @@ class SourceConnector(ABC):
         ...
 
     @abstractmethod
-    def read_records(self, table: str) -> Iterator[dict]:
-        """Yield rows from the given table."""
+    def read_records(self, table: str, cursor_field: str | None = None, cursor_value: str | None = None) -> Iterator[dict]:
+        """Yield rows from the given table.
+
+        Optional `cursor_field` and `cursor_value` can be provided to perform incremental reads.
+        """
         ...
 
 

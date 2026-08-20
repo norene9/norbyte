@@ -20,6 +20,7 @@ class ConnectionService:
             source_id=connection.source_id,
             project_id=connection.project_id,
             schedule=connection.schedule,
+            selected_streams=connection.selected_streams,
             source_connection_json=decrypt_config(connection.source_connection_json) if connection.source_connection_json else None,
             destination_connection_json=decrypt_config(connection.destination_connection_json) if connection.destination_connection_json else None,
         )

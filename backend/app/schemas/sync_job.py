@@ -11,6 +11,7 @@ class SyncJobResponse(BaseModel):
     records_processed: Optional[int] = None
     finished_at: Optional[str] = None
     error_message: Optional[str] = None
+    logs: Optional[str] = None
 
     class Config:
         from_attributes = True

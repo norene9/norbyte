@@ -76,6 +76,32 @@ class SyncServiceTests(unittest.TestCase):
         self.assertIsNotNone(job.finished_at)
         self.assertIsNone(job.error_message)
 
+    def test_run_sync_uses_selected_streams_without_discovery(self):
+        self.connection.selected_streams = ["test_users"]
+        self.session.commit()
+
+        events = []
+        source = MagicMock(spec=["discover", "get_table_schema", "read_records"])
+        source.get_table_schema.side_effect = lambda table: events.append(("schema", table)) or [
+            {"name": "id", "data_type": "integer", "max_length": None, "nullable": False},
+        ]
+        source.read_records.side_effect = lambda *args, **kwargs: events.append(("read", args[0])) or [{"id": 1}]
+        destination = MagicMock(spec=["ensure_table_matches_schema", "write_records"])
+        destination.ensure_table_matches_schema.side_effect = lambda table, schema: events.append(("ensure", table))
+
+        with patch("app.services.sync_service.get_source_connector") as mock_source_connector, patch("app.services.sync_service.get_destination_connector") as mock_destination_connector:
+            mock_source_connector.return_value.return_value = source
+            mock_destination_connector.return_value.return_value = destination
+
+            job = self.service.run_sync(self.connection.id)
+
+        self.assertEqual(job.status, "success")
+        source.discover.assert_not_called()
+        self.assertEqual(events, [("schema", "test_users"), ("ensure", "test_users"), ("read", "test_users")])
+        destination.ensure_table_matches_schema.assert_called_once()
+        source.read_records.assert_called_once_with("test_users", cursor_field=None, cursor_value=None)
+        destination.write_records.assert_called_once_with("test_users", [{"id": 1}])
+
     def test_list_jobs_returns_connection_history(self):
         earlier = SyncJob(
             connection_id=self.connection.id,

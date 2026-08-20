@@ -7,6 +7,7 @@ from .destination_definition import DestinationDefinition
 from .source_definition import SourceDefinition
 from .schema import Schema
 from .sync_jobs import SyncJob
+from .sync_state import SyncState
 
 __all__ = [
     "User",
@@ -17,5 +18,6 @@ __all__ = [
     "DestinationDefinition",
     "SourceDefinition",
     "Schema",
-    "SyncJob"
+    "SyncJob",
+    "SyncState"
 ]
