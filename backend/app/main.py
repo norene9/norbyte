@@ -11,6 +11,7 @@ from app.routers import (
     projects_router,
     connections_router,
     definitions_router,
+    semantic_router,
 )
 
 # Initialize FastAPI Application
@@ -35,6 +36,7 @@ app.include_router(users_router, prefix="/api/v1")
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(connections_router, prefix="/api/v1")
 app.include_router(definitions_router, prefix="/api/v1")
+app.include_router(semantic_router, prefix="/api/v1")
 app.mount("/destinations", StaticFiles(directory="/data/uploads/destinations"), name="destinations")
 app.mount("/sources", StaticFiles(directory="/data/uploads/sources"), name="sources")
 

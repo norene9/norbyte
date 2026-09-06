@@ -8,6 +8,7 @@ from .source_definition import SourceDefinition
 from .schema import Schema
 from .sync_jobs import SyncJob
 from .sync_state import SyncState
+from .semantic import SemanticTable, SemanticField, SemanticRelationship
 
 __all__ = [
     "User",
@@ -19,5 +20,8 @@ __all__ = [
     "SourceDefinition",
     "Schema",
     "SyncJob",
-    "SyncState"
+    "SyncState",
+    "SemanticTable",
+    "SemanticField",
+    "SemanticRelationship",
 ]

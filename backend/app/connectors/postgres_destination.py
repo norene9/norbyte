@@ -151,6 +151,51 @@ class PostgresDestinationConnector(DestinationConnector):
         finally:
             conn.close()
 
+    def get_table_schema(self, table: str) -> list[dict]:
+        """Return destination table columns and primary-key metadata."""
+        schema = self.config.get("schema", "public")
+        conn = self._connect()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT column_name, data_type, character_maximum_length, is_nullable
+                    FROM information_schema.columns
+                    WHERE table_schema = %s AND table_name = %s
+                    ORDER BY ordinal_position
+                    """,
+                    (schema, table),
+                )
+                columns = cur.fetchall()
+                cur.execute(
+                    """
+                    SELECT kcu.column_name
+                    FROM information_schema.table_constraints AS tc
+                    JOIN information_schema.key_column_usage AS kcu
+                      ON tc.constraint_name = kcu.constraint_name
+                     AND tc.table_schema = kcu.table_schema
+                     AND tc.table_name = kcu.table_name
+                    WHERE tc.constraint_type = 'PRIMARY KEY'
+                      AND tc.table_schema = %s
+                      AND tc.table_name = %s
+                    ORDER BY kcu.ordinal_position
+                    """,
+                    (schema, table),
+                )
+                primary_key_columns = {row[0] for row in cur.fetchall()}
+            return [
+                {
+                    "name": column[0],
+                    "data_type": column[1],
+                    "max_length": column[2],
+                    "nullable": column[3] == "YES",
+                    "primary_key": column[0] in primary_key_columns,
+                }
+                for column in columns
+            ]
+        finally:
+            conn.close()
+
     def truncate_table(self, table: str, table_prefix: str = "") -> None:
         schema = self.config.get("schema", "public")
         actual_table = f"{table_prefix}{table}"
