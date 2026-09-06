@@ -68,11 +68,25 @@ class RestAPISourceConnector(SourceConnector):
         headers = self._build_auth_headers()
         auth = self._build_auth()
 
+        # Incremental filtering: if cursor_field is provided, only yield records where cursor_field > cursor_value
+        def _should_yield(record):
+            if not cursor_field:
+                return True
+            record_cursor = record.get(cursor_field)
+            if record_cursor is None:
+                return False
+            # Convert both to strings for comparison (cursor_value is already a string from SyncState)
+            record_cursor_str = str(record_cursor)
+            if cursor_value is None:
+                return True
+            return record_cursor_str > cursor_value
+
         if pagination_type == "none":
             resp = requests.get(url, headers=headers, auth=auth, timeout=30)
             resp.raise_for_status()
             for record in self._extract_records(resp.json(), records_path):
-                yield record
+                if _should_yield(record):
+                    yield record
 
         elif pagination_type == "page_number":
             page = 1
@@ -84,25 +98,27 @@ class RestAPISourceConnector(SourceConnector):
                 if not records:
                     break
                 for record in records:
-                    yield record
+                    if _should_yield(record):
+                        yield record
                 page += 1
 
         elif pagination_type == "cursor":
             cursor_param = stream.get("cursor_param", "cursor")
             next_cursor_path = stream["next_cursor_path"]
-            cursor_value = None
+            api_cursor = None
             while True:
-                params = {cursor_param: cursor_value} if cursor_value else {}
+                params = {cursor_param: api_cursor} if api_cursor else {}
                 resp = requests.get(url, headers=headers, auth=auth, params=params, timeout=30)
                 resp.raise_for_status()
                 body = resp.json()
                 records = self._extract_records(body, records_path)
                 for record in records:
-                    yield record
+                    if _should_yield(record):
+                        yield record
 
                 # walk the next_cursor_path to find the next page's cursor
-                cursor_value = body
+                api_cursor = body
                 for part in next_cursor_path.split("."):
-                    cursor_value = cursor_value.get(part) if cursor_value else None
-                if not cursor_value:
+                    api_cursor = api_cursor.get(part) if api_cursor else None
+                if not api_cursor:
                     break
