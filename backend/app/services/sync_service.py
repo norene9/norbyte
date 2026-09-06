@@ -20,6 +20,14 @@ class SyncService:
         connection = self.connection_repo.get_by_id(connection_id)
         if not connection:
             raise HTTPException(status_code=404, detail="Connection not found")
+        
+        # Ensure old connections without a prefix get one assigned
+        if not connection.destination_table_prefix:
+            connection.destination_table_prefix = f"conn{connection.id}_"
+            self.connection_repo.db.add(connection)
+            self.connection_repo.db.commit()
+            self.connection_repo.db.refresh(connection)
+        
         return connection
 
     def list_schemas(self, connection_id: int, source_or_destination: str = "source") -> list[str]:
@@ -110,6 +118,9 @@ class SyncService:
                 _append_job_log(f"Discovered streams: {configured_streams}")
 
             total_records = 0
+            
+            # Get the destination table prefix from the connection (defaults to empty string for backward compatibility)
+            table_prefix = connection.destination_table_prefix or ""
 
             for stream_entry in configured_streams:
                 # support either simple table name strings or dicts with extra config
@@ -126,14 +137,14 @@ class SyncService:
                 ensure_table_matches_schema = getattr(destination, "ensure_table_matches_schema", None)
                 if callable(get_table_schema) and callable(ensure_table_matches_schema):
                     source_schema = get_table_schema(table_name)
-                    ensure_table_matches_schema(table_name, source_schema)
+                    ensure_table_matches_schema(table_name, source_schema, table_prefix=table_prefix)
                     _append_job_log(f"Prepared destination table: {table_name}")
 
                 if refresh:
                     truncate_table = getattr(destination, "truncate_table", None)
                     if not callable(truncate_table):
                         raise ValueError("The destination connector does not support full refreshes")
-                    truncate_table(table_name)
+                    truncate_table(table_name, table_prefix=table_prefix)
                     _append_job_log(f"Refreshed destination table: {table_name}")
 
                 # Load last sync state for this connection+table
@@ -162,7 +173,7 @@ class SyncService:
                 _append_job_log(f"Read {len(records)} records from source for {table_name}")
 
                 if records:
-                    destination.write_records(table_name, records)
+                    destination.write_records(table_name, records, table_prefix=table_prefix)
                     _append_job_log(f"Wrote {len(records)} records to destination for {table_name}")
                     total_records += len(records)
 
@@ -250,7 +261,9 @@ class SyncService:
             if not hasattr(connector, "read_records"):
                 raise HTTPException(status_code=400, detail="Destination connector does not support previews")
 
-            return connector.read_records(table, limit=limit)
+            # Use the destination table prefix when reading from destination
+            table_prefix = connection.destination_table_prefix or ""
+            return connector.read_records(table, limit=limit, table_prefix=table_prefix)
         except HTTPException:
             raise
         except Exception as exc:

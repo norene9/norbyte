@@ -15,6 +15,7 @@ class Connection(Base):
     source_connection_json = Column(String, nullable=False)
     destination_connection_json = Column(String, nullable=False)
     selected_streams = Column(JSON, nullable=True)
+    destination_table_prefix = Column(String, nullable=True)
 
     # Relationships
     destination_definition = relationship("DestinationDefinition", back_populates="connections")

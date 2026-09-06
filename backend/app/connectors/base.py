@@ -40,12 +40,12 @@ class DestinationConnector(ABC):
         ...
 
     @abstractmethod
-    def read_records(self, table: str, limit: int = 50) -> list[dict]:
+    def read_records(self, table: str, limit: int = 50, table_prefix: str = "") -> list[dict]:
         """Read rows from a destination table for previews or validation."""
         ...
 
     @abstractmethod
-    def write_records(self, table: str, records: list[dict]) -> None:
+    def write_records(self, table: str, records: list[dict], table_prefix: str = "") -> None:
         """Write records to the destination, respecting write_mode."""
         ...
 

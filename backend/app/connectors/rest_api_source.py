@@ -19,14 +19,23 @@ class RestAPISourceConnector(SourceConnector):
             return (self.config.get("username"), self.config.get("password"))
         return None
 
-    def test_connection(self):
+    def test_connection(self) -> bool:
+        streams = self.config.get("streams", [])
+        if not streams:
+            raise ValueError("No streams configured to test against")
+
         base_url = self.config["base_url"].rstrip("/")
-        resp = requests.get(f"{base_url}/health", headers=self._build_auth_headers(),
-                            auth=self._build_auth(),
-                            timeout=10
-                            )
+        first_stream = streams[0]
+        url = f'{base_url}{first_stream["path"]}'
+
+        resp = requests.get(
+            url,
+            headers=self._build_auth_headers(),
+            auth=self._build_auth(),
+            timeout=10,
+        )
         if resp.status_code >= 400:
-            raise Exception(f"Connection test failed with status code {resp.status_code}: {resp.text}")
+            raise ValueError(f"API returned {resp.status_code} for {url}: {resp.text[:200]}")
         return True
     def discover(self) -> list[str]:
         return [s["name"] for s in self.config.get("streams", [])]

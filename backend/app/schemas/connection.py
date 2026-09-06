@@ -11,6 +11,7 @@ class ConnectionBase(BaseModel):
     destination_connection_json: Optional[Dict[str, Any]] = None
     # Allow either a list of stream names or list of dicts with per-stream config
     selected_streams: Optional[list[Dict[str, Any] | str]] = None
+    destination_table_prefix: Optional[str] = None
 
 
 class ConnectionCreate(ConnectionBase):
@@ -57,6 +58,7 @@ class ConnectionResponse(BaseModel):
     source_definition: Optional[SourceDefinitionResponse] = None
     schemas: list[SchemaResponse] = []
     selected_streams: Optional[list[Dict[str, Any] | str]] = None
+    destination_table_prefix: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -68,3 +70,4 @@ class ConnectionUpdate(BaseModel):
     destination_connection_json: Optional[Dict[str, Any]] = None
     selected_streams: Optional[list[str]] = None
     last_scheduled_at: Optional[str] = None
+    destination_table_prefix: Optional[str] = None

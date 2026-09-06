@@ -21,6 +21,7 @@ class ConnectionService:
             project_id=connection.project_id,
             schedule=connection.schedule,
             selected_streams=connection.selected_streams,
+            destination_table_prefix=connection.destination_table_prefix,
             source_connection_json=decrypt_config(connection.source_connection_json) if connection.source_connection_json else None,
             destination_connection_json=decrypt_config(connection.destination_connection_json) if connection.destination_connection_json else None,
         )
@@ -51,17 +52,42 @@ class ConnectionService:
         encrypted["source_connection_json"] = encrypt_config(dto.source_connection_json)
         encrypted["destination_connection_json"] = encrypt_config(dto.destination_connection_json)
         connection = self.repository.create(encrypted)
+        
+        # Generate default prefix if not provided, using the connection's ID
+        if not connection.destination_table_prefix:
+            connection.destination_table_prefix = f"conn{connection.id}_"
+            self.repository.db.add(connection)
+            self.repository.db.commit()
+            self.repository.db.refresh(connection)
+        
         return self._decrypt_connection_payloads(connection)
 
     def get(self, connection_id: int) -> Connection:
         connection = self.repository.get_by_id(connection_id)
         if not connection:
             raise ConnectionNotFoundError(connection_id)
+        
+        # Ensure old connections without a prefix get one assigned
+        if not connection.destination_table_prefix:
+            connection.destination_table_prefix = f"conn{connection.id}_"
+            self.repository.db.add(connection)
+            self.repository.db.commit()
+            self.repository.db.refresh(connection)
+        
         return self._decrypt_connection_payloads(connection)
 
     def list(self) -> list[Connection]:
         connections = self.repository.list()
-        return [self._decrypt_connection_payloads(connection) for connection in connections]
+        result = []
+        for connection in connections:
+            # Ensure old connections without a prefix get one assigned
+            if not connection.destination_table_prefix:
+                connection.destination_table_prefix = f"conn{connection.id}_"
+                self.repository.db.add(connection)
+                self.repository.db.commit()
+                self.repository.db.refresh(connection)
+            result.append(self._decrypt_connection_payloads(connection))
+        return result
 
     def update(self, connection_id: int, dto: ConnectionUpdate) -> Connection:
         connection = self.repository.get_by_id(connection_id)
