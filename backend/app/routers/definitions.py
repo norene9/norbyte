@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.security import require_admin
+from app.connectors.registry import list_connector_types
 from app.db.session import get_db
 from app.repositories import DefinitionRepository
 from app.schemas.destination_definition import DestinationDefinitionCreate, DestinationDefinitionResponse, DestinationDefinitionUpdate
@@ -11,6 +12,14 @@ from app.schemas.source_definition import SourceDefinitionCreate, SourceDefiniti
 from app.services.definition_service import DefinitionService
 
 router = APIRouter(prefix="/definitions", tags=["definitions"])
+
+
+@router.get("/connectors", response_model=list[str])
+def list_connectors(source_or_destination: str = "source"):
+    try:
+        return list_connector_types(source_or_destination)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 def parse_config_json(raw_value: str | None) -> dict | None:

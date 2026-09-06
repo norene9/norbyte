@@ -27,12 +27,46 @@ class PostgresDestinationConnector(DestinationConnector):
         conn.close()
         return True
 
+    def discover(self) -> list[str]:
+        schema = self.config.get("schema", "public")
+        conn = self._connect()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT table_name FROM information_schema.tables WHERE table_schema = %s",
+                    (schema,),
+                )
+                return [row[0] for row in cur.fetchall()]
+        finally:
+            conn.close()
+
+    def truncate_table(self, table: str) -> None:
+        schema = self.config.get("schema", "public")
+        conn = self._connect()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    sql.SQL("TRUNCATE TABLE {}.{}").format(
+                        sql.Identifier(schema),
+                        sql.Identifier(table),
+                    )
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
     def ensure_table_matches_schema(self, table: str, source_columns: list[dict]) -> None:
-        """Create a missing destination table using the source PostgreSQL types."""
+        """Make the destination table's columns match the source schema."""
         if not source_columns:
             raise ValueError(f"No schema metadata found for source table '{table}'")
 
         schema = self.config.get("schema", "public")
+        configured_primary_key = self.config.get("primary_key", [])
+        if isinstance(configured_primary_key, str):
+            configured_primary_key = [configured_primary_key]
+        primary_key = configured_primary_key or [
+            column["name"] for column in source_columns if column.get("primary_key")
+        ]
         column_definitions = []
         for column in source_columns:
             pg_type = column["data_type"]
@@ -46,6 +80,10 @@ class PostgresDestinationConnector(DestinationConnector):
             )
             column_definitions.append(definition)
 
+        if primary_key:
+            primary_key_sql = sql.SQL(", ").join(sql.Identifier(column) for column in primary_key)
+            column_definitions.append(sql.SQL("PRIMARY KEY ({})").format(primary_key_sql))
+
         create_table = sql.SQL("CREATE TABLE IF NOT EXISTS {}.{} ({})").format(
             sql.Identifier(schema),
             sql.Identifier(table),
@@ -55,7 +93,87 @@ class PostgresDestinationConnector(DestinationConnector):
         conn = self._connect()
         try:
             with conn.cursor() as cur:
-                cur.execute(create_table)
+                cur.execute(
+                    """
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_schema = %s AND table_name = %s
+                    """,
+                    (schema, table),
+                )
+                existing_columns = {row[0] for row in cur.fetchall()}
+
+                cur.execute(
+                                        """
+                                        SELECT tc.constraint_name, kcu.column_name
+                                        FROM information_schema.table_constraints AS tc
+                                        JOIN information_schema.key_column_usage AS kcu
+                                            ON tc.constraint_name = kcu.constraint_name
+                                         AND tc.table_schema = kcu.table_schema
+                                         AND tc.table_name = kcu.table_name
+                                        WHERE tc.constraint_type = 'PRIMARY KEY'
+                                            AND tc.table_schema = %s
+                                            AND tc.table_name = %s
+                                        ORDER BY kcu.ordinal_position
+                                        """,
+                                        (schema, table),
+                                )
+                primary_key_rows = cur.fetchall()
+
+                if not existing_columns:
+                    cur.execute(create_table)
+                else:
+                    source_column_names = {column["name"] for column in source_columns}
+
+                    for column in source_columns:
+                        if column["name"] in existing_columns:
+                            continue
+
+                        pg_type = column["data_type"]
+                        if column.get("max_length"):
+                            pg_type = f"{pg_type}({column['max_length']})"
+                        nullable = "" if column.get("nullable", True) else " NOT NULL"
+                        cur.execute(
+                            sql.SQL("ALTER TABLE {}.{} ADD COLUMN {} {}{}")
+                            .format(
+                                sql.Identifier(schema),
+                                sql.Identifier(table),
+                                sql.Identifier(column["name"]),
+                                sql.SQL(pg_type),
+                                sql.SQL(nullable),
+                            )
+                        )
+
+                    for column_name in existing_columns - source_column_names:
+                        cur.execute(
+                            sql.SQL("ALTER TABLE {}.{} DROP COLUMN {}")
+                            .format(
+                                sql.Identifier(schema),
+                                sql.Identifier(table),
+                                sql.Identifier(column_name),
+                            )
+                        )
+
+                    existing_primary_key = [row[1] for row in primary_key_rows]
+                    if primary_key and existing_primary_key != primary_key:
+                        if existing_primary_key:
+                            cur.execute(
+                                sql.SQL("ALTER TABLE {}.{} DROP CONSTRAINT {}")
+                                .format(
+                                    sql.Identifier(schema),
+                                    sql.Identifier(table),
+                                    sql.Identifier(primary_key_rows[0][0]),
+                                )
+                            )
+                        cur.execute(
+                            sql.SQL("ALTER TABLE {}.{} ADD CONSTRAINT {} PRIMARY KEY ({})")
+                            .format(
+                                sql.Identifier(schema),
+                                sql.Identifier(table),
+                                sql.Identifier(f"{table}_pkey"),
+                                sql.SQL(", ").join(sql.Identifier(column) for column in primary_key),
+                            )
+                        )
             conn.commit()
         finally:
             conn.close()

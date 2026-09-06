@@ -35,6 +35,11 @@ class DestinationConnector(ABC):
         ...
 
     @abstractmethod
+    def discover(self) -> list[str]:
+        """Return a list of destination tables/streams."""
+        ...
+
+    @abstractmethod
     def read_records(self, table: str, limit: int = 50) -> list[dict]:
         """Read rows from a destination table for previews or validation."""
         ...
@@ -43,4 +48,8 @@ class DestinationConnector(ABC):
     def write_records(self, table: str, records: list[dict]) -> None:
         """Write records to the destination, respecting write_mode."""
         ...
+
+    def truncate_table(self, table: str) -> None:
+        """Remove all rows from a destination table for a full refresh."""
+        raise NotImplementedError("This destination connector does not support full refreshes")
         

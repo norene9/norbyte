@@ -59,6 +59,7 @@ def delete_connection(
 @router.post("/{connection_id}/sync", response_model=SyncJobResponse)
 def trigger_sync(
     connection_id: int,
+    refresh: bool = Query(False),
     service: SyncService = Depends(get_sync_service),
 ):
     # Create a queued job record so callers get an immediate job id/status
@@ -71,11 +72,27 @@ def trigger_sync(
     try:
         from app.tasks.celery_worker import run_sync_task
 
-        run_sync_task.delay(connection_id, job.id)
+        run_sync_task.delay(connection_id, job.id, refresh)
     except Exception:
         # If Celery isn't available, fall back to running synchronously
-        service.run_sync(connection_id, job_id=job.id)
+        service.run_sync(connection_id, job_id=job.id, refresh=refresh)
 
+    return job
+
+
+@router.post("/{connection_id}/jobs/{job_id}/retry", response_model=SyncJobResponse)
+def retry_sync(
+    connection_id: int,
+    job_id: int,
+    service: SyncService = Depends(get_sync_service),
+):
+    job = service.create_retry_job(connection_id, job_id)
+    try:
+        from app.tasks.celery_worker import run_sync_task
+
+        run_sync_task.delay(connection_id, job.id)
+    except Exception:
+        service.run_sync(connection_id, job_id=job.id)
     return job
 
 

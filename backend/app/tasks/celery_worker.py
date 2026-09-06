@@ -19,7 +19,7 @@ celery_app = Celery("norbyte", broker=REDIS_URL)
 
 
 @celery_app.task(name="norbyte.tasks.run_sync")
-def run_sync_task(connection_id: int, job_id: int | None = None) -> dict:
+def run_sync_task(connection_id: int, job_id: int | None = None, refresh: bool = False) -> dict:
     """Celery task wrapper that runs a sync for the given connection and updates the job.
 
     The task creates its own DB session and SyncService instance so it can run outside
@@ -32,7 +32,7 @@ def run_sync_task(connection_id: int, job_id: int | None = None) -> dict:
         definition_service = DefinitionService(definition_repo)
         service = SyncService(db, connection_repo, definition_service)
 
-        job = service.run_sync(connection_id, job_id=job_id)
+        job = service.run_sync(connection_id, job_id=job_id, refresh=refresh)
         # Return a small summary for visibility in Celery results
         return {"job_id": job.id, "status": job.status, "records_processed": job.records_processed}
     finally:

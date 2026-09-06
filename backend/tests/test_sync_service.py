@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 from app.core.encryption import encrypt_config
 from app.db.base_class import Base
-from app.models import Connection, DestinationDefinition, Project, SourceDefinition, SyncJob, User
+from app.models import Connection, DestinationDefinition, Project, SourceDefinition, SyncJob, SyncState, User
 from app.repositories.connection_repository import ConnectionRepository
 from app.services.definition_service import DefinitionService
 from app.services.sync_service import SyncService
@@ -101,6 +101,41 @@ class SyncServiceTests(unittest.TestCase):
         destination.ensure_table_matches_schema.assert_called_once()
         source.read_records.assert_called_once_with("test_users", cursor_field=None, cursor_value=None)
         destination.write_records.assert_called_once_with("test_users", [{"id": 1}])
+
+    def test_refresh_truncates_and_resets_cursor_before_reading(self):
+        self.connection.selected_streams = [{"name": "customers", "cursor_field": "id"}]
+        self.session.add(SyncState(
+            connection_id=self.connection.id,
+            table_name="customers",
+            cursor_field="id",
+            cursor_value="42",
+        ))
+        self.session.commit()
+
+        source = MagicMock(spec=["discover", "read_records"])
+        source.read_records.return_value = []
+        destination = MagicMock(spec=["truncate_table", "write_records"])
+
+        with patch("app.services.sync_service.get_source_connector") as mock_source_connector, patch("app.services.sync_service.get_destination_connector") as mock_destination_connector:
+            mock_source_connector.return_value.return_value = source
+            mock_destination_connector.return_value.return_value = destination
+
+            job = self.service.run_sync(self.connection.id, refresh=True)
+
+        self.assertEqual(job.status, "success")
+        destination.truncate_table.assert_called_once_with("customers")
+        source.read_records.assert_called_once_with("customers", cursor_field="id", cursor_value=None)
+
+    def test_create_retry_job_requires_failed_job(self):
+        failed_job = SyncJob(connection_id=self.connection.id, status="failed", records_processed=2)
+        self.session.add(failed_job)
+        self.session.commit()
+
+        retry_job = self.service.create_retry_job(self.connection.id, failed_job.id)
+
+        self.assertEqual(retry_job.status, "queued")
+        self.assertIn(str(failed_job.id), retry_job.logs)
+        self.assertEqual(retry_job.connection_id, self.connection.id)
 
     def test_list_jobs_returns_connection_history(self):
         earlier = SyncJob(

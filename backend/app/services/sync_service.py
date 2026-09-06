@@ -44,7 +44,7 @@ class SyncService:
 
         return connector.discover()
 
-    def run_sync(self, connection_id: int, job_id: int | None = None) -> SyncJob:
+    def run_sync(self, connection_id: int, job_id: int | None = None, refresh: bool = False) -> SyncJob:
         connection = self._get_connection_or_404(connection_id)
 
         source_def = self.definition_service.get_source(connection.source_id)
@@ -129,6 +129,13 @@ class SyncService:
                     ensure_table_matches_schema(table_name, source_schema)
                     _append_job_log(f"Prepared destination table: {table_name}")
 
+                if refresh:
+                    truncate_table = getattr(destination, "truncate_table", None)
+                    if not callable(truncate_table):
+                        raise ValueError("The destination connector does not support full refreshes")
+                    truncate_table(table_name)
+                    _append_job_log(f"Refreshed destination table: {table_name}")
+
                 # Load last sync state for this connection+table
                 state = (
                     self.db.query(SyncState)
@@ -137,6 +144,13 @@ class SyncService:
                 )
                 if not state:
                     state = SyncState(connection_id=connection.id, table_name=table_name, cursor_field=cursor_field, cursor_value=None)
+                    self.db.add(state)
+                    self.db.commit()
+                    self.db.refresh(state)
+
+                if refresh:
+                    state.cursor_value = None
+                    state.cursor_field = cursor_field
                     self.db.add(state)
                     self.db.commit()
                     self.db.refresh(state)
@@ -180,6 +194,30 @@ class SyncService:
         self.db.commit()
         self.db.refresh(job)
         return job
+
+    def create_retry_job(self, connection_id: int, failed_job_id: int) -> SyncJob:
+        connection = self._get_connection_or_404(connection_id)
+        failed_job = (
+            self.db.query(SyncJob)
+            .filter(SyncJob.id == failed_job_id, SyncJob.connection_id == connection.id)
+            .first()
+        )
+        if not failed_job:
+            raise HTTPException(status_code=404, detail="Sync job not found")
+        if failed_job.status != "failed":
+            raise HTTPException(status_code=400, detail="Only failed sync jobs can be retried")
+
+        retry_job = SyncJob(
+            connection_id=connection.id,
+            status="queued",
+            started_at=None,
+            records_processed=0,
+            logs=f"Retrying failed job {failed_job.id}\n",
+        )
+        self.db.add(retry_job)
+        self.db.commit()
+        self.db.refresh(retry_job)
+        return retry_job
 
     def list_jobs(self, connection_id: int) -> list[SyncJob]:
         return (
