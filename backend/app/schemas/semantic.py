@@ -49,8 +49,10 @@ class SemanticRelationshipCreate(BaseModel):
     name: str
     from_table_id: int
     from_column: str
+    from_json_path: str | None = None
     to_table_id: int
     to_column: str
+    to_json_path: str | None = None
     relationship_type: str = "many_to_one"
 
 
@@ -59,8 +61,10 @@ class SemanticRelationshipUpdate(BaseModel):
     name: str | None = None
     from_table_id: int | None = None
     from_column: str | None = None
+    from_json_path: str | None = None
     to_table_id: int | None = None
     to_column: str | None = None
+    to_json_path: str | None = None
     relationship_type: str | None = None
 
 

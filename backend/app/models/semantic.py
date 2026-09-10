@@ -40,6 +40,8 @@ class SemanticRelationship(Base):
     name = Column(String, nullable=False)
     from_table_id = Column(Integer, ForeignKey("semantic_table.id"), nullable=False)
     from_column = Column(String, nullable=False)
+    from_json_path = Column(String, nullable=True)
     to_table_id = Column(Integer, ForeignKey("semantic_table.id"), nullable=False)
     to_column = Column(String, nullable=False)
+    to_json_path = Column(String, nullable=True)
     relationship_type = Column(String, nullable=False, default="many_to_one")

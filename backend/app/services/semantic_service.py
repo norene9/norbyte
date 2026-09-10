@@ -116,10 +116,14 @@ class SemanticService:
             relationship.from_table_id = dto.from_table_id
         if dto.from_column is not None:
             relationship.from_column = dto.from_column
+        if dto.from_json_path is not None:
+            relationship.from_json_path = dto.from_json_path
         if dto.to_table_id is not None:
             relationship.to_table_id = dto.to_table_id
         if dto.to_column is not None:
             relationship.to_column = dto.to_column
+        if dto.to_json_path is not None:
+            relationship.to_json_path = dto.to_json_path
         if dto.relationship_type is not None:
             relationship.relationship_type = dto.relationship_type
 
