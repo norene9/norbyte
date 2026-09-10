@@ -141,13 +141,15 @@ async def stream_job_logs(
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
-@router.get("/{connection_id}/schemas", response_model=list[str])
+@router.get("/{connection_id}/schemas")
 def list_connection_schemas(
     connection_id: int,
     source_or_destination: str = Query("source", pattern="^(source|destination)$"),
+    limit: int | None = Query(None, ge=1),
+    offset: int = Query(0, ge=0),
     service: SyncService = Depends(get_sync_service),
 ):
-    return service.list_schemas(connection_id, source_or_destination)
+    return service.list_schemas(connection_id, source_or_destination, limit=limit, offset=offset)
 
 
 @router.get("/{connection_id}/preview/{table}")
@@ -156,7 +158,14 @@ def preview_destination_data(
     table: str,
     source_or_destination: str = Query("destination", pattern="^(source|destination)$"),
     limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     service: SyncService = Depends(get_sync_service),
 ):
-    return service.preview_table(connection_id, table, source_or_destination=source_or_destination, limit=limit)
+    return service.preview_table(
+        connection_id,
+        table,
+        source_or_destination=source_or_destination,
+        limit=limit,
+        offset=offset,
+    )
 

@@ -8,8 +8,10 @@ from app.models import User
 from app.schemas.semantic import (
     SemanticRelationshipCreate,
     SemanticRelationshipResponse,
+    SemanticRelationshipUpdate,
     SemanticTableCreate,
     SemanticTableResponse,
+    SemanticTableUpdate,
 )
 from app.services.semantic_service import SemanticService
 
@@ -24,6 +26,26 @@ def create_semantic_table(
     service: SemanticService = Depends(get_semantic_service),
 ):
     return service.create_table(dto)
+
+
+@router.put("/tables/{table_id}", response_model=SemanticTableResponse)
+def update_semantic_table(
+    table_id: int,
+    dto: SemanticTableUpdate,
+    current_user: User = Depends(get_current_user_db),
+    service: SemanticService = Depends(get_semantic_service),
+):
+    return service.update_table(table_id, dto)
+
+
+@router.delete("/tables/{table_id}")
+def delete_semantic_table(
+    table_id: int,
+    current_user: User = Depends(get_current_user_db),
+    service: SemanticService = Depends(get_semantic_service),
+):
+    service.delete_table(table_id)
+    return {"message": "Semantic table deleted successfully"}
 
 
 @router.get("/tables/suggest")
@@ -52,6 +74,26 @@ def create_relationship(
     service: SemanticService = Depends(get_semantic_service),
 ):
     return service.create_relationship(dto)
+
+
+@router.put("/relationships/{relationship_id}", response_model=SemanticRelationshipResponse)
+def update_relationship(
+    relationship_id: int,
+    dto: SemanticRelationshipUpdate,
+    current_user: User = Depends(get_current_user_db),
+    service: SemanticService = Depends(get_semantic_service),
+):
+    return service.update_relationship(relationship_id, dto)
+
+
+@router.delete("/relationships/{relationship_id}")
+def delete_relationship(
+    relationship_id: int,
+    current_user: User = Depends(get_current_user_db),
+    service: SemanticService = Depends(get_semantic_service),
+):
+    service.delete_relationship(relationship_id)
+    return {"message": "Semantic relationship deleted successfully"}
 
 
 @router.get("/projects/{project_id}/relationships", response_model=list[SemanticRelationshipResponse])

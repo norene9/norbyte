@@ -30,7 +30,36 @@ class SyncService:
         
         return connection
 
-    def list_schemas(self, connection_id: int, source_or_destination: str = "source") -> list[str]:
+    def _paginate_items(self, items: list, limit: int | None, offset: int = 0) -> dict:
+        if offset < 0:
+            raise HTTPException(status_code=400, detail="offset must be >= 0")
+
+        if limit is None:
+            limit = len(items)
+            if limit == 0:
+                limit = 1
+
+        if limit < 1:
+            raise HTTPException(status_code=400, detail="limit must be >= 1")
+
+        page = (offset // limit) + 1 if limit else 1
+        page_items = items[offset:offset + limit]
+       
+
+        return {
+            "items": page_items,
+            "page": page,
+            "limit": limit,
+            "offset": offset
+        }
+
+    def list_schemas(
+        self,
+        connection_id: int,
+        source_or_destination: str = "source",
+        limit: int | None = None,
+        offset: int = 0,
+    ) -> dict:
         connection = self._get_connection_or_404(connection_id)
         normalized = (source_or_destination or "source").lower()
 
@@ -50,7 +79,13 @@ class SyncService:
         if not hasattr(connector, "discover"):
             raise HTTPException(status_code=400, detail=f"{normalized.title()} connector does not support schema discovery")
 
-        return connector.discover()
+        tables = connector.discover()
+        if normalized == "destination":
+            prefix = connection.destination_table_prefix or ""
+            if prefix:
+                tables = [table for table in tables if table.startswith(prefix)]
+
+        return self._paginate_items(tables, limit, offset)
 
     def run_sync(self, connection_id: int, job_id: int | None = None, refresh: bool = False) -> SyncJob:
         connection = self._get_connection_or_404(connection_id)
@@ -238,7 +273,14 @@ class SyncService:
             .all()
         )
 
-    def preview_table(self, connection_id: int, table: str, source_or_destination: str = "destination", limit: int = 50):
+    def preview_table(
+        self,
+        connection_id: int,
+        table: str,
+        source_or_destination: str = "destination",
+        limit: int = 50,
+        offset: int = 0,
+    ):
         connection = self._get_connection_or_404(connection_id)
         normalized = (source_or_destination or "destination").lower()
 
@@ -251,7 +293,7 @@ class SyncService:
                 if not hasattr(connector, "read_records"):
                     raise HTTPException(status_code=400, detail="Source connector does not support previews")
                 rows = list(connector.read_records(table))
-                return rows[:limit]
+                return self._paginate_items(rows, limit, offset)
 
             definition = self.definition_service.get_destination(connection.destination_id)
             config = decrypt_config(connection.destination_connection_json)
@@ -261,9 +303,9 @@ class SyncService:
             if not hasattr(connector, "read_records"):
                 raise HTTPException(status_code=400, detail="Destination connector does not support previews")
 
-            # Use the destination table prefix when reading from destination
             table_prefix = connection.destination_table_prefix or ""
-            return connector.read_records(table, limit=limit, table_prefix=table_prefix)
+            rows = connector.read_records(table, limit=limit + offset, table_prefix=table_prefix)
+            return self._paginate_items(rows, limit, offset)
         except HTTPException:
             raise
         except Exception as exc:

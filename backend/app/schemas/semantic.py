@@ -24,6 +24,15 @@ class SemanticTableCreate(BaseModel):
     fields: list[SemanticFieldCreate] = Field(default_factory=list)
 
 
+class SemanticTableUpdate(BaseModel):
+    project_id: int | None = None
+    connection_id: int | None = None
+    physical_table: str | None = None
+    display_name: str | None = None
+    description: str | None = None
+    fields: list[SemanticFieldCreate] | None = None
+
+
 class SemanticTableResponse(BaseModel):
     id: int
     project_id: int
@@ -43,6 +52,16 @@ class SemanticRelationshipCreate(BaseModel):
     to_table_id: int
     to_column: str
     relationship_type: str = "many_to_one"
+
+
+class SemanticRelationshipUpdate(BaseModel):
+    project_id: int | None = None
+    name: str | None = None
+    from_table_id: int | None = None
+    from_column: str | None = None
+    to_table_id: int | None = None
+    to_column: str | None = None
+    relationship_type: str | None = None
 
 
 class SemanticRelationshipResponse(SemanticRelationshipCreate):

@@ -170,6 +170,23 @@ class SyncServiceTests(unittest.TestCase):
         self.assertEqual(source_tables, ["customers", "orders"])
         self.assertEqual(destination_tables, ["analytics_customers", "analytics_orders"])
 
+    def test_list_schemas_supports_limit_and_offset(self):
+        destination_connector = MagicMock()
+        destination_connector.discover.return_value = ["analytics_customers", "analytics_orders", "analytics_invoices"]
+
+        with patch("app.services.sync_service.get_destination_connector") as mock_destination_connector:
+            mock_destination_connector.return_value.return_value = destination_connector
+
+            paged_tables = self.service.list_schemas(
+                self.connection.id,
+                "destination",
+                limit=2,
+                offset=1,
+            )
+
+        self.assertEqual(paged_tables["items"], ["analytics_orders", "analytics_invoices"])
+        self.assertEqual(paged_tables["page"], 1)
+
     def test_preview_table_raises_http_400_for_missing_table(self):
         destination_connector = MagicMock()
         destination_connector.read_records.side_effect = Exception('relation "reception.reception" does not exist')

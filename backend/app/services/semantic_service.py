@@ -3,7 +3,12 @@ from app.core.encryption import decrypt_config
 from app.exceptions import NotFoundError
 from app.models import SemanticField, SemanticRelationship, SemanticTable
 from app.repositories.semantic_repository import SemanticRepository
-from app.schemas.semantic import SemanticRelationshipCreate, SemanticTableCreate
+from app.schemas.semantic import (
+    SemanticRelationshipCreate,
+    SemanticRelationshipUpdate,
+    SemanticTableCreate,
+    SemanticTableUpdate,
+)
 
 
 NUMERIC_TYPES = {"smallint", "integer", "bigint", "numeric", "real", "double precision", "decimal"}
@@ -60,6 +65,32 @@ class SemanticService:
         )
         return self.repository.create_table(semantic_table)
 
+    def update_table(self, table_id: int, dto: SemanticTableUpdate) -> SemanticTable:
+        semantic_table = self.repository.get_table_by_id(table_id)
+        if not semantic_table:
+            raise NotFoundError("Semantic table not found")
+
+        if dto.project_id is not None:
+            semantic_table.project_id = dto.project_id
+        if dto.connection_id is not None:
+            semantic_table.connection_id = dto.connection_id
+        if dto.physical_table is not None:
+            semantic_table.physical_table = dto.physical_table
+        if dto.display_name is not None:
+            semantic_table.display_name = dto.display_name
+        if dto.description is not None:
+            semantic_table.description = dto.description
+        if dto.fields is not None:
+            semantic_table.fields = [SemanticField(**field.model_dump()) for field in dto.fields]
+
+        return self.repository.update_table(semantic_table)
+
+    def delete_table(self, table_id: int) -> None:
+        semantic_table = self.repository.get_table_by_id(table_id)
+        if not semantic_table:
+            raise NotFoundError("Semantic table not found")
+        self.repository.delete_table(semantic_table)
+
     def list_tables(self, project_id: int) -> list[SemanticTable]:
         return self.repository.list_tables_by_project(project_id)
 
@@ -71,6 +102,34 @@ class SemanticService:
 
         relationship = SemanticRelationship(**dto.model_dump())
         return self.repository.create_relationship(relationship)
+
+    def update_relationship(self, relationship_id: int, dto: SemanticRelationshipUpdate) -> SemanticRelationship:
+        relationship = self.repository.get_relationship_by_id(relationship_id)
+        if not relationship:
+            raise NotFoundError("Semantic relationship not found")
+
+        if dto.project_id is not None:
+            relationship.project_id = dto.project_id
+        if dto.name is not None:
+            relationship.name = dto.name
+        if dto.from_table_id is not None:
+            relationship.from_table_id = dto.from_table_id
+        if dto.from_column is not None:
+            relationship.from_column = dto.from_column
+        if dto.to_table_id is not None:
+            relationship.to_table_id = dto.to_table_id
+        if dto.to_column is not None:
+            relationship.to_column = dto.to_column
+        if dto.relationship_type is not None:
+            relationship.relationship_type = dto.relationship_type
+
+        return self.repository.update_relationship(relationship)
+
+    def delete_relationship(self, relationship_id: int) -> None:
+        relationship = self.repository.get_relationship_by_id(relationship_id)
+        if not relationship:
+            raise NotFoundError("Semantic relationship not found")
+        self.repository.delete_relationship(relationship)
 
     def list_relationships(self, project_id: int) -> list[SemanticRelationship]:
         return self.repository.list_relationships_by_project(project_id)
