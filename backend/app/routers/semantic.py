@@ -67,6 +67,24 @@ def list_semantic_tables(
     return service.list_tables(project_id)
 
 
+@router.get("/tables/{table_id}/query-options")
+def get_query_options(
+    table_id: int,
+    current_user: User = Depends(get_current_user_db),
+    service: SemanticService = Depends(get_semantic_service),
+):
+    return service.get_query_options(table_id)
+
+
+@router.get("/projects/{project_id}/query-options")
+def get_project_query_options(
+    project_id: int,
+    current_user: User = Depends(get_current_user_db),
+    service: SemanticService = Depends(get_semantic_service),
+):
+    return service.get_project_query_options(project_id)
+
+
 @router.post("/relationships", response_model=SemanticRelationshipResponse)
 def create_relationship(
     dto: SemanticRelationshipCreate,

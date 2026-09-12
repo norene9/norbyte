@@ -16,6 +16,16 @@ class SemanticRepository:
     def get_table_by_id(self, table_id: int) -> SemanticTable | None:
         return self.db.query(SemanticTable).filter(SemanticTable.id == table_id).first()
 
+    def get_table_by_name(self, project_id: int, table_name: str) -> SemanticTable | None:
+        return (
+            self.db.query(SemanticTable)
+            .filter(SemanticTable.project_id == project_id)
+            .filter(
+                (SemanticTable.display_name == table_name) | (SemanticTable.physical_table == table_name)
+            )
+            .first()
+        )
+
     def list_tables_by_project(self, project_id: int) -> list[SemanticTable]:
         return self.db.query(SemanticTable).filter(SemanticTable.project_id == project_id).all()
 
@@ -38,10 +48,24 @@ class SemanticRepository:
     def get_relationship_by_id(self, relationship_id: int) -> SemanticRelationship | None:
         return self.db.query(SemanticRelationship).filter(SemanticRelationship.id == relationship_id).first()
 
+    def get_relationship_by_name(self, project_id: int, relationship_name: str) -> SemanticRelationship | None:
+        return (
+            self.db.query(SemanticRelationship)
+            .filter(SemanticRelationship.project_id == project_id, SemanticRelationship.name == relationship_name)
+            .first()
+        )
+
     def list_relationships_by_project(self, project_id: int) -> list[SemanticRelationship]:
         return (
             self.db.query(SemanticRelationship)
             .filter(SemanticRelationship.project_id == project_id)
+            .all()
+        )
+
+    def list_relationships_from_table(self, table_id: int) -> list[SemanticRelationship]:
+        return (
+            self.db.query(SemanticRelationship)
+            .filter(SemanticRelationship.from_table_id == table_id)
             .all()
         )
 

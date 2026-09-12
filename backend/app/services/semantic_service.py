@@ -94,6 +94,51 @@ class SemanticService:
     def list_tables(self, project_id: int) -> list[SemanticTable]:
         return self.repository.list_tables_by_project(project_id)
 
+    def get_query_options(self, table_id: int) -> dict:
+        table = self.repository.get_table_by_id(table_id)
+        if not table:
+            raise NotFoundError("Semantic table not found")
+
+        dimensions = [
+            {
+                "field": field.column_name,
+                "display_name": field.display_name,
+                "data_type": field.data_type,
+            }
+            for field in table.fields
+            if field.field_type == "dimension" and not field.is_hidden
+        ]
+        measures = [
+            {
+                "field": field.column_name,
+                "display_name": field.display_name,
+                "default_aggregation": field.default_aggregation,
+                "allowed_aggregations": ["sum", "avg", "count", "min", "max"],
+            }
+            for field in table.fields
+            if field.field_type == "measure" and not field.is_hidden
+        ]
+        joins = []
+        for relationship in self.repository.list_relationships_from_table(table_id):
+            to_table = self.repository.get_table_by_id(relationship.to_table_id)
+            if to_table:
+                joins.append({
+                    "name": relationship.name,
+                    "to_table": to_table.display_name,
+                    "relationship_type": relationship.relationship_type,
+                })
+
+        return {
+            "table": table.display_name,
+            "dimensions": dimensions,
+            "measures": measures,
+            "joins": joins,
+            "supports_count_all": True,
+        }
+
+    def get_project_query_options(self, project_id: int) -> list[dict]:
+        return [self.get_query_options(table.id) for table in self.list_tables(project_id)]
+
     def create_relationship(self, dto: SemanticRelationshipCreate) -> SemanticRelationship:
         from_table = self.repository.get_table_by_id(dto.from_table_id)
         to_table = self.repository.get_table_by_id(dto.to_table_id)
