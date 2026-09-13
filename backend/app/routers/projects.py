@@ -91,7 +91,7 @@ def run_project_query(
     if not connection:
         raise HTTPException(status_code=404, detail="No connection found for project")
 
-    destination_definition = DefinitionRepository(db).get_destination(connection.destination_id)
+    destination_definition = DefinitionRepository(db).get_destination_by_id(connection.destination_id)
     if not destination_definition:
         raise HTTPException(status_code=404, detail="Destination definition not found")
 

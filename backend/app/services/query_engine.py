@@ -1,6 +1,6 @@
 from fastapi import HTTPException
 
-from app.models import SemanticField, SemanticRelationship, SemanticTable
+from app.models import Connection, SemanticField, SemanticRelationship, SemanticTable
 from app.repositories.semantic_repository import SemanticRepository
 from app.schemas.query import QueryRequest
 
@@ -37,6 +37,11 @@ class QueryEngine:
         if not table:
             raise HTTPException(status_code=422, detail=f"Unknown table '{table_name}'")
         return table
+
+    def _physical_table_name(self, table: SemanticTable) -> str:
+        connection = self.semantic_repo.db.query(Connection).filter(Connection.id == table.connection_id).first()
+        prefix = connection.destination_table_prefix if connection else ""
+        return f"{prefix or ''}{table.physical_table}"
 
     def _resolve_field(
         self,
@@ -107,8 +112,9 @@ class QueryEngine:
 
             left = self._join_expr(from_alias, relationship.from_column, relationship.from_json_path)
             right = self._join_expr(to_alias, relationship.to_column, relationship.to_json_path)
+            to_physical = self._physical_table_name(to_table)
             join_clauses.append(
-                f'JOIN "{to_table.physical_table}" {to_alias} ON {left} = {right}'
+                f'JOIN "{to_physical}" {to_alias} ON {left} = {right}'
             )
 
         for dimension_name in request.dimensions:
@@ -158,7 +164,8 @@ class QueryEngine:
                 where_parts.append(f"{expr} {operator} %s")
                 params.append(item.value)
 
-        sql = f'SELECT {", ".join(select_parts)} FROM "{base_table.physical_table}" {base_alias}'
+        base_physical = self._physical_table_name(base_table)
+        sql = f'SELECT {", ".join(select_parts)} FROM "{base_physical}" {base_alias}'
         if join_clauses:
             sql += " " + " ".join(join_clauses)
         if where_parts:
