@@ -1,12 +1,17 @@
 import asyncio
+import json
+from typing import Annotated, List
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 import time
+from sqlalchemy.orm import Session
 
 from app.dependencies import get_connection_service, get_sync_service
+from app.db.session import get_db
 from app.models import SyncJob
-from app.schemas.connection import ConnectionCreate, ConnectionResponse, ConnectionUpdate
+from app.repositories import DefinitionRepository
+from app.schemas.connection import ConnectionCreate, ConnectionResponse, ConnectionUpdate, ConnectionWithSyncJobResponse
 from app.schemas.sync_job import SyncJobResponse
 from app.services.connection_service import ConnectionService
 from app.services.sync_service import SyncService
@@ -15,12 +20,83 @@ from app.db.session import SessionLocal
 router = APIRouter(prefix="/connections", tags=["connections"])
 
 
+def _parse_json_object(raw_value: str, field_name: str) -> dict:
+    try:
+        parsed = json.loads(raw_value)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=422, detail=f"{field_name} must be valid JSON.") from exc
+    if not isinstance(parsed, dict):
+        raise HTTPException(status_code=422, detail=f"{field_name} must be a JSON object.")
+    return parsed
+
+
+def _parse_json_list(raw_value: str | None, field_name: str) -> list | None:
+    if raw_value is None or raw_value.strip() == "":
+        return None
+    try:
+        parsed = json.loads(raw_value)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=422, detail=f"{field_name} must be valid JSON.") from exc
+    if not isinstance(parsed, list):
+        raise HTTPException(status_code=422, detail=f"{field_name} must be a JSON array.")
+    return parsed
+
+
 @router.post("/", response_model=ConnectionResponse)
 def create_connection(
     connection: ConnectionCreate,
     service: ConnectionService = Depends(get_connection_service),
 ):
     return service.create(connection)
+
+
+@router.post("/upload-data-file", response_model=ConnectionWithSyncJobResponse)
+def create_connection_from_data_file(
+    files: Annotated[List[UploadFile], File(...)],
+    source_id: int = Form(...),
+    destination_id: int = Form(...),
+    destination_connection_json: str = Form(...),
+    project_id: int | None = Form(None),
+    schedule: str | None = Form(None),
+    destination_table_prefix: str | None = Form(None),
+    selected_streams: str | None = Form(None),
+    db: Session = Depends(get_db),
+    connection_service: ConnectionService = Depends(get_connection_service),
+    sync_service: SyncService = Depends(get_sync_service),
+):
+    """Upload one or more CSV/Excel files (each becomes its own stream), create a
+    connection for it the same way as other source types (linked to a project
+    and destination), and immediately load the data into the destination."""
+    try:
+        source_config = DefinitionRepository(db).save_data_files(files)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    dto = ConnectionCreate(
+        source_id=source_id,
+        destination_id=destination_id,
+        project_id=project_id,
+        schedule=schedule,
+        source_connection_json=source_config,
+        destination_connection_json=_parse_json_object(destination_connection_json, "destination_connection_json"),
+        destination_table_prefix=destination_table_prefix,
+        selected_streams=_parse_json_list(selected_streams, "selected_streams"),
+    )
+    connection = connection_service.create(dto)
+
+    job = SyncJob(connection_id=connection.id, status="queued", started_at=None, records_processed=0, logs="")
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    try:
+        from app.tasks.celery_worker import run_sync_task
+
+        run_sync_task.delay(connection.id, job.id, False)
+    except Exception:
+        job = sync_service.run_sync(connection.id, job_id=job.id, refresh=False)
+
+    return {"connection": connection, "sync_job": job}
 
 
 @router.get("/{connection_id}", response_model=ConnectionResponse)
@@ -60,8 +136,16 @@ def delete_connection(
 def trigger_sync(
     connection_id: int,
     refresh: bool = Query(False),
+    selected_streams: list[dict | str] | None = Body(None, embed=True),
     service: SyncService = Depends(get_sync_service),
 ):
+    # Let callers pick which streams to sync at trigger time instead of only at connection creation
+    if selected_streams is not None:
+        connection = service._get_connection_or_404(connection_id)
+        connection.selected_streams = selected_streams
+        service.db.add(connection)
+        service.db.commit()
+
     # Create a queued job record so callers get an immediate job id/status
     job = SyncJob(connection_id=connection_id, status="queued", started_at=None, records_processed=0, logs="")
     service.db.add(job)

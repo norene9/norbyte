@@ -1,5 +1,6 @@
 
 import json
+import math
 import psycopg2
 import psycopg2.extras
 from psycopg2 import sql
@@ -41,6 +42,8 @@ class PostgresDestinationConnector(DestinationConnector):
 
     def _serialize_value(self, value):
         """Serialize Python values for PostgreSQL, wrapping dict/list in Json()."""
+        if isinstance(value, float) and not math.isfinite(value):
+            return None
         if isinstance(value, (dict, list)):
             return Json(value)
         return value
@@ -212,6 +215,22 @@ class PostgresDestinationConnector(DestinationConnector):
         finally:
             conn.close()
 
+    def drop_table(self, table: str, table_prefix: str = "") -> None:
+        schema = self.config.get("schema", "public")
+        actual_table = f"{table_prefix}{table}"
+        conn = self._connect()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    sql.SQL("DROP TABLE IF EXISTS {}.{}").format(
+                        sql.Identifier(schema),
+                        sql.Identifier(actual_table),
+                    )
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
     def ensure_table_matches_schema(self, table: str, source_columns: list[dict], table_prefix: str = "") -> None:
         """Make the destination table's columns match the source schema."""
         if not source_columns:
@@ -283,24 +302,46 @@ class PostgresDestinationConnector(DestinationConnector):
                 else:
                     source_column_names = {column["name"] for column in source_columns}
 
-                    for column in source_columns:
-                        if column["name"] in existing_columns:
-                            continue
+                    cur.execute(
+                        """
+                        SELECT column_name, data_type
+                        FROM information_schema.columns
+                        WHERE table_schema = %s AND table_name = %s
+                        """,
+                        (schema, actual_table),
+                    )
+                    existing_column_types = {row[0]: row[1] for row in cur.fetchall()}
 
+                    for column in source_columns:
                         pg_type = column["data_type"]
                         if column.get("max_length"):
                             pg_type = f"{pg_type}({column['max_length']})"
-                        nullable = "" if column.get("nullable", True) else " NOT NULL"
-                        cur.execute(
-                            sql.SQL("ALTER TABLE {}.{} ADD COLUMN {} {}{}")
-                            .format(
-                                sql.Identifier(schema),
-                                sql.Identifier(actual_table),
-                                sql.Identifier(column["name"]),
-                                sql.SQL(pg_type),
-                                sql.SQL(nullable),
+
+                        if column["name"] not in existing_columns:
+                            nullable = "" if column.get("nullable", True) else " NOT NULL"
+                            cur.execute(
+                                sql.SQL("ALTER TABLE {}.{} ADD COLUMN {} {}{}")
+                                .format(
+                                    sql.Identifier(schema),
+                                    sql.Identifier(actual_table),
+                                    sql.Identifier(column["name"]),
+                                    sql.SQL(pg_type),
+                                    sql.SQL(nullable),
+                                )
                             )
-                        )
+                        elif existing_column_types[column["name"]].upper() != column["data_type"].upper():
+                            # Type drifted from source (e.g. an older integer column that must widen to bigint)
+                            cur.execute(
+                                sql.SQL("ALTER TABLE {}.{} ALTER COLUMN {} TYPE {} USING {}::{}")
+                                .format(
+                                    sql.Identifier(schema),
+                                    sql.Identifier(actual_table),
+                                    sql.Identifier(column["name"]),
+                                    sql.SQL(pg_type),
+                                    sql.Identifier(column["name"]),
+                                    sql.SQL(pg_type),
+                                )
+                            )
 
                     for column_name in existing_columns - source_column_names:
                         cur.execute(
@@ -343,7 +384,10 @@ class PostgresDestinationConnector(DestinationConnector):
         try:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(f'SELECT * FROM "{schema}"."{actual_table}" LIMIT %s', (limit,))
-                return [dict(row) for row in cur.fetchall()]
+                return [
+                    {key: (None if isinstance(value, float) and not math.isfinite(value) else value) for key, value in row.items()}
+                    for row in cur.fetchall()
+                ]
         finally:
             conn.close()
 

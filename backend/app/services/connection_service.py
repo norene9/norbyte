@@ -1,3 +1,4 @@
+from app.connectors.registry import get_destination_connector
 from app.core.encryption import decrypt_config, encrypt_config
 from app.exceptions import BusinessRuleError, ConnectionNotFoundError
 from app.models import Connection, DestinationDefinition, Project, SourceDefinition
@@ -112,8 +113,52 @@ class ConnectionService:
         return self._decrypt_connection_payloads(updated)
 
     def delete(self, connection_id: int) -> None:
-        connection = self.get(connection_id)
+        connection = self.repository.get_by_id(connection_id)
+        if not connection:
+            raise ConnectionNotFoundError(connection_id)
+        self._drop_destination_tables(connection)
         self.repository.delete(connection)
+
+    def _drop_destination_tables(self, connection: Connection) -> None:
+        """Drop the physical destination tables created for this connection's streams."""
+        destination_definition = self.repository.db.query(DestinationDefinition).filter(
+            DestinationDefinition.id == connection.destination_id
+        ).first()
+        if not destination_definition or not destination_definition.connector_type:
+            return
+
+        try:
+            connector_cls = get_destination_connector(destination_definition.connector_type)
+            destination_config = decrypt_config(connection.destination_connection_json)
+            destination = connector_cls(destination_config)
+        except Exception:
+            return
+
+        drop_table = getattr(destination, "drop_table", None)
+        if not callable(drop_table):
+            return
+
+        prefix = connection.destination_table_prefix or ""
+        streams = connection.selected_streams or []
+        table_names = [
+            (entry.get("name") or entry.get("table")) if isinstance(entry, dict) else entry
+            for entry in streams
+        ]
+        if not table_names and hasattr(destination, "discover"):
+            try:
+                table_names = [
+                    table[len(prefix):] for table in destination.discover() if not prefix or table.startswith(prefix)
+                ]
+            except Exception:
+                table_names = []
+
+        for table_name in table_names:
+            if not table_name:
+                continue
+            try:
+                drop_table(table_name, table_prefix=prefix)
+            except Exception:
+                pass
 
     def _validate_source(self, source_id: int) -> None:
         if not self._exists(SourceDefinition, source_id):

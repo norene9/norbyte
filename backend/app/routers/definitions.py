@@ -161,3 +161,4 @@ def delete_destination_definition(
 ):
     service.delete_destination(destination_id)
     return {"message": "Destination definition deleted successfully"}
+

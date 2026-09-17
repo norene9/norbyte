@@ -1,6 +1,7 @@
 import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from app.core.security import get_current_user
@@ -12,6 +13,7 @@ from app.routers import (
     connections_router,
     definitions_router,
     semantic_router,
+    saved_cubes_router,
 )
 
 # Initialize FastAPI Application
@@ -20,6 +22,43 @@ app = FastAPI(
     description="Automated zero-maintenance API & Database replication platform.",
     version="1.0.0"
 )
+
+
+def _downgrade_file_schemas_for_swagger_ui(node):
+    """Swagger UI doesn't render file-upload widgets for OpenAPI 3.1's
+    `contentMediaType` keyword on array items, only for the older 3.0
+    `format: binary` style. Rewrite the schema recursively so file inputs
+    (including multi-file arrays) show up correctly in /docs."""
+    if isinstance(node, dict):
+        if node.get("contentMediaType"):
+            node.pop("contentMediaType", None)
+            node.pop("contentEncoding", None)
+            node["type"] = "string"
+            node["format"] = "binary"
+        for value in node.values():
+            _downgrade_file_schemas_for_swagger_ui(value)
+    elif isinstance(node, list):
+        for item in node:
+            _downgrade_file_schemas_for_swagger_ui(item)
+
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    schema["openapi"] = "3.0.3"
+    _downgrade_file_schemas_for_swagger_ui(schema)
+    app.openapi_schema = schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
 
 # Add CORS middleware
 app.add_middleware(
@@ -37,6 +76,7 @@ app.include_router(projects_router, prefix="/api/v1")
 app.include_router(connections_router, prefix="/api/v1")
 app.include_router(definitions_router, prefix="/api/v1")
 app.include_router(semantic_router, prefix="/api/v1")
+app.include_router(saved_cubes_router, prefix="/api/v1")
 app.mount("/destinations", StaticFiles(directory="/data/uploads/destinations"), name="destinations")
 app.mount("/sources", StaticFiles(directory="/data/uploads/sources"), name="sources")
 

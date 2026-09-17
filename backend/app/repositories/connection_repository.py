@@ -1,6 +1,10 @@
 from sqlalchemy.orm import Session
-from app.models import Connection
+from app.core.encryption import decrypt_config
+from app.models import Connection, Schema, SyncJob, SyncState
+from app.repositories.definition_repository import DefinitionRepository
 from app.schemas.connection import ConnectionCreate, ConnectionUpdate
+
+FILE_SOURCE_CONNECTOR_TYPE = "file_upload"
 
 
 class ConnectionRepository:
@@ -32,5 +36,25 @@ class ConnectionRepository:
         return connection
 
     def delete(self, connection: Connection) -> None:
+        self._delete_source_data_file_if_any(connection)
+        # Manually remove dependents first since the FKs have no ON DELETE CASCADE
+        self.db.query(SyncState).filter(SyncState.connection_id == connection.id).delete()
+        self.db.query(SyncJob).filter(SyncJob.connection_id == connection.id).delete()
+        self.db.query(Schema).filter(Schema.connection_id == connection.id).delete()
         self.db.delete(connection)
         self.db.commit()
+
+    def _delete_source_data_file_if_any(self, connection: Connection) -> None:
+        source_definition = connection.source_definition
+        if not source_definition or source_definition.connector_type != FILE_SOURCE_CONNECTOR_TYPE:
+            return
+
+        config = decrypt_config(connection.source_connection_json)
+        repo = DefinitionRepository(self.db)
+
+        if "files" in config:
+            for entry in config["files"]:
+                if entry.get("file_path"):
+                    repo.delete_data_file(entry["file_path"])
+        elif config.get("file_path"):
+            repo.delete_data_file(config["file_path"])
