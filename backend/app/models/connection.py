@@ -9,10 +9,13 @@ class Connection(Base):
     id = Column(Integer, primary_key=True, index=True)
     destination_id = Column(Integer, ForeignKey("destination_definition.id"))
     source_id = Column(Integer, ForeignKey("source_definition.id"))
-    project_id = Column(Integer, ForeignKey("projects.id"))
+    project_id = Column(Integer, ForeignKey("projects.id"), nullable=True)
     schedule = Column(String, nullable=True)
-    source_connection_json = Column(JSON, nullable=True)
-    destination_connection_json = Column(JSON, nullable=True)
+    last_scheduled_at = Column(String, nullable=True)
+    source_connection_json = Column(String, nullable=False)
+    destination_connection_json = Column(String, nullable=False)
+    selected_streams = Column(JSON, nullable=True)
+    destination_table_prefix = Column(String, nullable=True)
 
     # Relationships
     destination_definition = relationship("DestinationDefinition", back_populates="connections")

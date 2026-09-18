@@ -43,6 +43,7 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
       - ./backend:/app
+      - uploads_data:/data/uploads 
     environment:
       DATABASE_URL: ${DATABASE_URL}
       REDIS_URL: ${REDIS_URL}
@@ -53,25 +54,25 @@ services:
     networks:
       - norbyte_network
 
-  # worker:
-  #   build:
-  #     context: ./backend
-  #     dockerfile: Dockerfile
-  #   container_name: norbyte_worker
-  #   restart: always
-  #   working_dir: /app
-  #   command: celery -A app.tasks.celery_worker worker --loglevel=info
-  #   volumes:
-  #     - ./backend:/app
-  #   environment:
-  #     DATABASE_URL: ${DATABASE_URL}
-  #     REDIS_URL: ${REDIS_URL}
-  #     ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-  #   depends_on:
-  #     - db
-  #     - redis
-  #   networks:
-  #     - norbyte_network
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: norbyte_worker
+    restart: always
+    working_dir: /app
+    command: celery -A app.tasks.celery_worker worker --loglevel=info
+    volumes:
+      - ./backend:/app
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+    depends_on:
+      - db
+      - redis
+    networks:
+      - norbyte_network
 
   nginx:
     image: nginx:alpine
@@ -88,6 +89,7 @@ services:
 
 volumes:
   db_data:
+  uploads_data:
 
 networks:
   norbyte_network:

@@ -1,11 +1,12 @@
+from typing import Any, Optional
+
 from pydantic import BaseModel
-from typing import Optional
 
 
 class DestinationDefinitionBase(BaseModel):
     name: str
-    logo: Optional[str] = None
-    config_icon: Optional[str] = None
+    config_json: Optional[dict[str, Any]] = None
+    connector_type: Optional[str] = None
 
 
 class DestinationDefinitionCreate(DestinationDefinitionBase):
@@ -14,6 +15,7 @@ class DestinationDefinitionCreate(DestinationDefinitionBase):
 
 class DestinationDefinitionResponse(DestinationDefinitionBase):
     id: int
+    logo: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -21,5 +23,5 @@ class DestinationDefinitionResponse(DestinationDefinitionBase):
 
 class DestinationDefinitionUpdate(BaseModel):
     name: Optional[str] = None
-    logo: Optional[str] = None
-    config_icon: Optional[str] = None
+    config_json: Optional[dict[str, Any]] = None
+    connector_type: Optional[str] = None

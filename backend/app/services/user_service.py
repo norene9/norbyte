@@ -5,7 +5,8 @@ from app.models import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.user import UserCreate
 from app.core.security import verify_password
-
+from app.core.security import get_current_user
+from fastapi import Depends
 class UserService:
     def __init__(self, repository: UserRepository):
         self.repository = repository
@@ -26,6 +27,9 @@ class UserService:
 
     def authenticate(self, username: str, password: str) -> User | None:
         user = self.repository.get_by_username(username)
-        if not user or not verify_password(plain_password, user.password):
+        if not user or not verify_password(password, user.password):
             raise HTTPException(status_code=401, detail="Invalid credentials")
         return user
+    def get_me(self, current_user: User) -> User:
+     return current_user
+

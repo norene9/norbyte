@@ -29,7 +29,7 @@ def login(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid username or password")
 
-    set_session_cookies(response, user.id)
+    set_session_cookies(response, user.id, user.role.type if user.role else "")
     return {"message": "Logged in successfully", "user": UserResponse.model_validate(user).model_dump()}
 
 

@@ -12,3 +12,4 @@ class User(Base):
     role_id = Column(Integer, ForeignKey("role.id"))
 
     role = relationship("Role", back_populates="users")
+    projects = relationship("Project", back_populates="user")

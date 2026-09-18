@@ -6,6 +6,7 @@ from .connection import ConnectionCreate, ConnectionResponse
 from .destination_definition import DestinationDefinitionCreate, DestinationDefinitionResponse
 from .source_definition import SourceDefinitionCreate, SourceDefinitionResponse
 from .schema import SchemaCreate, SchemaResponse
+from .sync_job import SyncJobResponse
 
 __all__ = [
     "UserCreate",
@@ -24,4 +25,5 @@ __all__ = [
     "SourceDefinitionResponse",
     "SchemaCreate",
     "SchemaResponse",
+    "SyncJobResponse",
 ]

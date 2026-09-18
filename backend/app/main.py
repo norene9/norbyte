@@ -2,8 +2,8 @@ import os
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from app.core.security import get_current_user
-from app.db.session import initialize_database
 from app.exceptions import BusinessRuleError, NotFoundError
 from app.routers import (
     auth_router,
@@ -11,6 +11,7 @@ from app.routers import (
     projects_router,
     connections_router,
     definitions_router,
+    semantic_router,
 )
 
 # Initialize FastAPI Application
@@ -35,7 +36,9 @@ app.include_router(users_router, prefix="/api/v1")
 app.include_router(projects_router, prefix="/api/v1")
 app.include_router(connections_router, prefix="/api/v1")
 app.include_router(definitions_router, prefix="/api/v1")
-
+app.include_router(semantic_router, prefix="/api/v1")
+app.mount("/destinations", StaticFiles(directory="/data/uploads/destinations"), name="destinations")
+app.mount("/sources", StaticFiles(directory="/data/uploads/sources"), name="sources")
 
 @app.middleware("http")
 async def enforce_authentication(request: Request, call_next):
@@ -60,11 +63,6 @@ async def enforce_authentication(request: Request, call_next):
             return JSONResponse(status_code=401, content={"detail": str(exc.detail if hasattr(exc, "detail") else exc)})
 
     return await call_next(request)
-
-
-@app.on_event("startup")
-def create_tables():
-    initialize_database()
 
 
 @app.exception_handler(NotFoundError)

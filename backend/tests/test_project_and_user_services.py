@@ -29,19 +29,39 @@ class ResourceServiceTests(unittest.TestCase):
         Base.metadata.drop_all(self.engine)
 
     def test_project_service_crud_flow(self):
+        user = User(username="alice", email="alice@example.com", password="secret")
+        self.session.add(user)
+        self.session.commit()
+
         service = ProjectService(ProjectRepository(self.session))
-        created = service.create(ProjectCreate(name="Demo", description="Test"))
+        created = service.create(ProjectCreate(name="Demo", description="Test"), user_id=user.id)
         self.assertEqual(created.name, "Demo")
 
-        fetched = service.get(created.id)
+        fetched = service.get(created.id, user_id=user.id)
         self.assertEqual(fetched.id, created.id)
 
-        updated = service.update(created.id, ProjectUpdate(name="Updated"))
+        updated = service.update(created.id, ProjectUpdate(name="Updated"), user_id=user.id)
         self.assertEqual(updated.name, "Updated")
 
-        service.delete(created.id)
+        service.delete(created.id, user_id=user.id)
         with self.assertRaises(ProjectNotFoundError):
-            service.get(created.id)
+            service.get(created.id, user_id=user.id)
+
+    def test_project_service_restricts_access_to_owner(self):
+        user_a = User(username="alice", email="alice@example.com", password="secret")
+        user_b = User(username="bob", email="bob@example.com", password="secret")
+        self.session.add_all([user_a, user_b])
+        self.session.commit()
+
+        service = ProjectService(ProjectRepository(self.session))
+        project = service.create(ProjectCreate(name="Owned project"), user_id=user_a.id)
+
+        self.assertEqual(project.user_id, user_a.id)
+        self.assertEqual(len(service.list(user_id=user_a.id)), 1)
+        self.assertEqual(len(service.list(user_id=user_b.id)), 0)
+
+        with self.assertRaises(ProjectNotFoundError):
+            service.get(project.id, user_id=user_b.id)
 
     def test_user_service_enforces_unique_username(self):
         service = UserService(UserRepository(self.session))
