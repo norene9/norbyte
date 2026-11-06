@@ -4,6 +4,7 @@ from .projects import router as projects_router
 from .connections import router as connections_router
 from .definitions import router as definitions_router
 from .semantic import router as semantic_router
+from .saved_cubes import router as saved_cubes_router
 
 __all__ = [
     "auth_router",
@@ -12,4 +13,5 @@ __all__ = [
     "connections_router",
     "definitions_router",
     "semantic_router",
+    "saved_cubes_router",
 ]

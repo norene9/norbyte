@@ -15,3 +15,4 @@ class Project(Base):
     # Relationships
     user = relationship("User", back_populates="projects")
     connections = relationship("Connection", back_populates="project")
+    saved_cubes = relationship("SavedCube", back_populates="project", cascade="all, delete-orphan")

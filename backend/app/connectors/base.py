@@ -52,4 +52,8 @@ class DestinationConnector(ABC):
     def truncate_table(self, table: str) -> None:
         """Remove all rows from a destination table for a full refresh."""
         raise NotImplementedError("This destination connector does not support full refreshes")
+
+    def drop_table(self, table: str, table_prefix: str = "") -> None:
+        """Drop a destination table entirely, e.g. when its Connection is deleted."""
+        raise NotImplementedError("This destination connector does not support dropping tables")
         

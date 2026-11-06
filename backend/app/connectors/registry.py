@@ -1,10 +1,12 @@
 from app.connectors.postgres_source import PostgresSourceConnector
 from app.connectors.postgres_destination import PostgresDestinationConnector
 from app.connectors.rest_api_source import RestAPISourceConnector
+from app.connectors.file_source import FileSourceConnector
 
 SOURCE_CONNECTOR_REGISTRY = {
     "postgres": PostgresSourceConnector,
     "rest_api": RestAPISourceConnector,
+     "file_upload": FileSourceConnector
 }
 
 DESTINATION_CONNECTOR_REGISTRY = {

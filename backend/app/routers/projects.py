@@ -1,3 +1,5 @@
+import math
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -17,6 +19,13 @@ from app.services.query_engine import QueryEngine
 from app.dependencies import get_query_engine
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+
+def _json_safe_row(row: dict) -> dict:
+    return {
+        key: None if isinstance(value, float) and not math.isfinite(value) else value
+        for key, value in row.items()
+    }
 
 
 def get_project_service(db: Session = Depends(get_db)) -> ProjectService:
@@ -102,7 +111,7 @@ def run_project_query(
         with conn.cursor() as cur:
             cur.execute(sql, params)
             columns = [desc[0] for desc in cur.description]
-            rows = [dict(zip(columns, row)) for row in cur.fetchall()]
+            rows = [_json_safe_row(dict(zip(columns, row))) for row in cur.fetchall()]
             return {"columns": columns, "rows": rows}
     finally:
         conn.close()

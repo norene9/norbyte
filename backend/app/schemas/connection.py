@@ -1,6 +1,8 @@
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 
+from app.schemas.sync_job import SyncJobResponse
+
 
 class ConnectionBase(BaseModel):
     destination_id: int
@@ -71,3 +73,11 @@ class ConnectionUpdate(BaseModel):
     selected_streams: Optional[list[str]] = None
     last_scheduled_at: Optional[str] = None
     destination_table_prefix: Optional[str] = None
+
+
+class ConnectionWithSyncJobResponse(BaseModel):
+    connection: ConnectionResponse
+    sync_job: SyncJobResponse
+
+    class Config:
+        from_attributes = True

@@ -2,8 +2,8 @@ from pydantic import BaseModel, Field
 
 
 class MeasureRequest(BaseModel):
-    field: str
-    aggregation: str | None = None
+    field: str | None = None
+    aggregation: str = "sum"
 
 
 class FilterRequest(BaseModel):

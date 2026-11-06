@@ -5,7 +5,7 @@ from app.repositories.semantic_repository import SemanticRepository
 from app.schemas.query import QueryRequest
 
 
-ALLOWED_AGGREGATIONS = {"sum", "avg", "count", "min", "max"}
+ALLOWED_AGGREGATIONS = {"sum", "avg", "count", "min", "max", "count_all"}
 ALLOWED_OPERATORS = {
     "eq": "=",
     "neq": "!=",
@@ -127,6 +127,12 @@ class QueryEngine:
             group_by_parts.append(expr)
 
         for measure in request.measures:
+            aggregation = (measure.aggregation or "sum").lower()
+            if aggregation == "count_all":
+                select_parts.append('COUNT(*) AS "count"')
+                continue
+            if not measure.field:
+                raise HTTPException(status_code=422, detail="Measure requires a 'field' unless aggregation is 'count_all'")
             field = self._resolve_field(base_table, measure.field, expected_type="measure", joined_tables=joined_tables)
             aggregation = (measure.aggregation or field.default_aggregation or "sum").lower()
             if aggregation not in ALLOWED_AGGREGATIONS:

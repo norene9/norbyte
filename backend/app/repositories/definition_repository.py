@@ -4,13 +4,14 @@ from app.schemas.destination_definition import DestinationDefinitionCreate, Dest
 from app.schemas.source_definition import SourceDefinitionCreate, SourceDefinitionUpdate
 from fastapi import UploadFile
 import os
+import re
 import uuid
 SOURCES_DIR = "/data/uploads/sources"
 DESTINATIONS_DIR = "/data/uploads/destinations"
-
+DATA_FILES_DIR = "/data/uploads/data_files"
 os.makedirs(SOURCES_DIR, exist_ok=True)
 os.makedirs(DESTINATIONS_DIR, exist_ok=True)
-
+os.makedirs(DATA_FILES_DIR, exist_ok=True)
 class DefinitionRepository:
     def __init__(self, db: Session):
         self.db = db
@@ -129,3 +130,46 @@ class DefinitionRepository:
                 os.remove(old_path)
         self.db.delete(destination)
         self.db.commit()
+    def save_data_file(self, file: UploadFile) -> dict:
+            """Save an uploaded CSV/Excel file for use as a file_upload source's config."""
+            ext = file.filename.split(".")[-1].lower()
+            if ext not in ("csv", "xlsx", "xls"):
+                raise ValueError(f"Unsupported file extension: '{ext}'. Expected csv, xlsx, or xls.")
+
+            filename = f"{uuid.uuid4()}.{ext}"
+            filepath = os.path.join(DATA_FILES_DIR, filename)
+
+            with open(filepath, "wb") as f:
+                f.write(file.file.read())
+
+            file_type = "xlsx" if ext in ("xlsx", "xls") else "csv"
+            return {"file_path": filepath, "file_type": file_type, "original_filename": file.filename}
+
+    def save_data_files(self, files: list[UploadFile]) -> dict:
+            """Save multiple uploaded CSV/Excel files, each becoming its own stream, for a file_upload source's config."""
+            if not files:
+                raise ValueError("At least one file must be provided")
+
+            used_stream_names: set[str] = set()
+            entries = []
+            for file in files:
+                entry = self.save_data_file(file)
+                base_name = os.path.splitext(file.filename)[0]
+                stream_name = re.sub(r"[^a-zA-Z0-9_]", "_", base_name).strip("_").lower() or "data"
+
+                candidate = stream_name
+                suffix = 1
+                while candidate in used_stream_names:
+                    suffix += 1
+                    candidate = f"{stream_name}_{suffix}"
+                used_stream_names.add(candidate)
+
+                entry["stream_name"] = candidate
+                entries.append(entry)
+
+            return {"files": entries}
+
+    def delete_data_file(self, file_path: str) -> None:
+        """Remove an uploaded data file, e.g. when its Connection is deleted."""
+        if file_path and os.path.exists(file_path):
+            os.remove(file_path)
